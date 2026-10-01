@@ -4,7 +4,7 @@ export default function ProfileScreen() {
   return (
     <PlaceholderScreen
       title="Perfil"
-      link={{ href: '/(profile)/post/demo', label: 'Abrir un post en esta pestaña' }}
+      links={[{ href: '/(profile)/post/demo', label: 'Abrir un post en esta pestaña' }]}
     />
   );
 }

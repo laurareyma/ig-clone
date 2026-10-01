@@ -1,39 +1,27 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useColorScheme } from 'react-native';
 
-import { Colors } from '@/presentation/theme';
+// Las pestañas son la base de la pila raíz: un deep link a un modal las deja debajo.
+export const unstable_settings = {
+  anchor: '(tabs)',
+};
 
+// Todo lo que debe cubrir la barra de pestañas (login, crear post, historias) se declara
+// aquí y no dentro de (tabs).
 export default function RootLayout() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
 
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <NativeTabs
-        backgroundColor={colors.background}
-        indicatorColor={colors.backgroundElement}
-        labelStyle={{ selected: { color: colors.text } }}>
-        <NativeTabs.Trigger name="(home)">
-          <NativeTabs.Trigger.Label>Inicio</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="(explore)">
-          <NativeTabs.Trigger.Label>Explorar</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf="magnifyingglass" md="search" />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="(activity)">
-          <NativeTabs.Trigger.Label>Actividad</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: 'heart', selected: 'heart.fill' }} md="favorite" />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="(profile)">
-          <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} md="person" />
-        </NativeTabs.Trigger>
-      </NativeTabs>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="create-post" options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="story/[userId]"
+          options={{ presentation: 'fullScreenModal', headerShown: false }}
+        />
+      </Stack>
     </ThemeProvider>
   );
 }

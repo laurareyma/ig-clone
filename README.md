@@ -10,6 +10,20 @@ cp .env.example .env.local   # pegar URL y publishable key del proyecto de Supab
 npx expo start
 ```
 
+Si falta alguna variable de `.env.local`, la app falla al arrancar indicando cuál.
+
+## Comprobaciones
+
+```bash
+npm run lint        # ESLint
+npm run typecheck   # TypeScript
+npm test            # pruebas unitarias (Jest); van junto al código como *.test.ts, fuera de src/app
+npm run test:rls    # reglas de privacidad
+npm run check       # las cuatro anteriores, lo mismo que corre el CI
+```
+
+`.github/workflows/ci.yml` ejecuta estas comprobaciones en cada pull request y en `main`.
+
 ## Base de datos
 
 El esquema y las reglas de privacidad (RLS) están en `supabase/migrations/`.
@@ -29,7 +43,7 @@ src/
   presentation/   Componentes, hooks y tema de la UI.
   domain/         Entidades y contratos de repositorios. No importa nada de las otras capas.
   data/
-    remote/       Cliente de Supabase.
+    remote/       Cliente de Supabase y validación de variables de entorno.
 supabase/
   migrations/     Esquema SQL + RLS.
   tests/          Pruebas de las reglas de privacidad.
@@ -46,11 +60,23 @@ Carpetas que se añaden al construir cada módulo:
 
 ## Navegación
 
-- `src/app/_layout.tsx` define las cuatro pestañas.
-- `src/app/(home,explore,activity,profile)/_layout.tsx` es un Stack que se instancia
-  una vez por pestaña: cada una conserva su propia pila.
-- `post/[id].tsx` está en ese grupo compartido, así que se puede abrir dentro de
-  cualquier pestaña con `/(explore)/post/{id}`, etc.
+```
+src/app/
+  _layout.tsx          Stack raíz: lo que cubre las pestañas se declara aquí.
+  (auth)/              Inicio de sesión y registro.
+  (tabs)/              Las cuatro pestañas.
+    (home,explore,activity,profile)/
+      _layout.tsx      Stack que se instancia una vez por pestaña.
+      post/[id].tsx    Pantalla compartida por las cuatro pilas.
+  create-post.tsx      Modal.
+  story/[userId].tsx   Modal a pantalla completa.
+```
+
+- Cada pestaña conserva su propia pila, porque el Stack del grupo compartido se
+  instancia una vez por pestaña.
+- `post/[id].tsx` se puede abrir dentro de cualquier pestaña con
+  `/(explore)/post/{id}`, etc.
+- Los modales viven fuera de `(tabs)` para poder tapar la barra de pestañas.
 
 ### Deep link
 

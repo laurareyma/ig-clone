@@ -3,10 +3,16 @@ import 'expo-sqlite/localStorage/install';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+import { parseEnv } from '@/data/remote/env';
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+// Expo solo sustituye EXPO_PUBLIC_* cuando se lee con process.env.NOMBRE literal:
+// ni process.env[nombre] ni desestructurar funcionan.
+const env = parseEnv({
+  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  supabasePublishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+});
+
+export const supabase = createClient(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
     storage: localStorage,
     autoRefreshToken: true,
