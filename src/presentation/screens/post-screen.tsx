@@ -20,6 +20,7 @@ import { addComment, MAX_TEXT_LENGTH } from '@/domain/usecases/posts';
 import { Avatar } from '@/presentation/components/avatar';
 import { EmptyState } from '@/presentation/components/empty-state';
 import { PostCard } from '@/presentation/components/post-card';
+import { SyncBanner } from '@/presentation/components/sync-banner';
 import { ThemedText } from '@/presentation/components/themed-text';
 import { ThemedView } from '@/presentation/components/themed-view';
 import { useDependencies } from '@/presentation/dependencies';
@@ -41,7 +42,7 @@ function CommentRow({ comment, isReply, onReply }: Row & { onReply: (comment: Co
         </ThemedText>
         <View style={styles.commentMeta}>
           <ThemedText type="code" themeColor="textSecondary">
-            {formatRelativeTime(comment.createdAt)}
+            {comment.pending ? 'Enviando…' : formatRelativeTime(comment.createdAt)}
           </ThemedText>
           <Pressable onPress={() => onReply(comment)} hitSlop={8} accessibilityRole="button">
             <ThemedText type="code" themeColor="textSecondary">
@@ -73,15 +74,17 @@ export function PostScreen({ postId }: { postId: string }) {
   async function send() {
     const body = draft;
     const parentId = replyTo?.id ?? null;
-    // Se limpia ya: el repositorio muestra el comentario al instante desde la base local.
     setDraft('');
     setReplyTo(null);
 
     try {
+      // Solo guarda en el dispositivo (comentario + operación en la cola), así que no
+      // depende de la red: sin conexión aparece igual, marcado como "Enviando…".
       await addComment(repository, { postId, body, parentId });
     } catch {
+      // Texto no válido o fallo al escribir en la base local.
       setDraft(body);
-      Alert.alert('No se pudo publicar el comentario', 'Revisa tu conexión e inténtalo de nuevo.');
+      Alert.alert('No se pudo guardar el comentario', 'Inténtalo de nuevo.');
     }
   }
 
@@ -106,6 +109,7 @@ export function PostScreen({ postId }: { postId: string }) {
   return (
     <ThemedView style={styles.fill}>
       <Stack.Screen options={{ title: 'Publicación' }} />
+      <SyncBanner />
       <KeyboardAvoidingView
         style={styles.fill}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

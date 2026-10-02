@@ -127,9 +127,8 @@ archivos locales que la caché controla.
 - **En local** (`data/local/post-store.ts`): `posts` guarda cada publicación una vez y
   `feed_entries` dice a qué listas pertenece. Refrescar reemplaza la lista en una
   transacción; cargar más añade.
-- **Like y comentario** se escriben primero en SQLite (la UI los muestra al instante) y
-  después en el servidor; si el servidor falla, se deshacen. Los comentarios llevan un id
-  generado en el cliente, así un reintento no los duplica.
+- **Like y comentario** se escriben en SQLite y pasan por la cola de sincronización
+  (ver más abajo): la UI los muestra al instante, con o sin conexión.
 - **Comentarios en tiempo real:** `useComments` abre un canal de Supabase Realtime
   mientras la pantalla está abierta; cada evento se escribe en SQLite y la lista se
   actualiza sola. El eco de un comentario propio se ignora porque el id ya existe.
@@ -161,9 +160,46 @@ Todas las escrituras y transacciones pasan por una cola (`serializeWrites` en
 lanzada mientras otra parte de la app tiene una transacción abierta quedaría dentro de
 ella.
 
-Carpetas que se añaden al construir cada módulo:
+### UI optimista y cola de sincronización
 
-- `data/sync/` — cola de sincronización offline.
+Dar like y comentar no esperan a la red. `data/sync/outbox.ts` implementa el patrón
+*outbox*:
+
+1. **Encolar.** En una sola transacción de SQLite se aplica el cambio local (el like, el
+   comentario) y se inserta la operación en la tabla `outbox`. O quedan las dos cosas o
+   ninguna, aunque la app se cierre en ese instante. La UI ya muestra el resultado.
+2. **Enviar.** Un único procesador toma siempre la operación más antigua (`ORDER BY id`),
+   la envía y, si sale bien, la borra. Nunca hay dos en vuelo, así que el servidor las
+   recibe en el orden en que se hicieron.
+3. **Disparadores.** Al encolar, al arrancar la app, al recuperar la conexión (NetInfo)
+   y al volver a primer plano. Sin conexión no se intenta nada.
+
+Qué pasa cuando un envío falla (`classify-error.ts`):
+
+| Tipo | Ejemplo | Qué hace la cola |
+|---|---|---|
+| Red | sin conexión, sin respuesta | Reintenta sin límite. No se pierde nada por estar mucho tiempo sin red. |
+| Servidor | saturado, tiempo agotado, token caducado | Reintenta; tras 8 intentos descarta la operación. |
+| Permanente | el post se borró, la RLS ya no lo permite | Descarta la operación y deja la copia local como el servidor. |
+
+- **Reintentos con espera exponencial** (1 s, 2 s, 4 s… hasta 60 s). La cola se detiene
+  en la operación que falló en vez de saltársela: adelantar un "quitar like" a su "like"
+  cambiaría el resultado.
+- **Idempotencia.** Si la respuesta se pierde, la operación se reenvía. Un like repetido
+  no cuenta doble (clave primaria `post_id + user_id`) y un comentario repetido se
+  ignora porque su id lo generó el cliente.
+- **Conflictos.** Al refrescar, los datos del servidor aún no incluyen lo que sigue en la
+  cola. `saveFromServer` vuelve a aplicar encima los likes y comentarios pendientes, y
+  `replaceComments` no borra los comentarios en cola. Si el servidor rechaza una
+  operación, gana el servidor: se descarta y la copia local se corrige. La base remota
+  nunca recibe datos inválidos, porque las restricciones y la RLS se aplican allí.
+- **Hilos.** La cola corre en el hilo de JavaScript, pero todo lo que hace es asíncrono:
+  SQLite y la red trabajan en hilos nativos, así que no bloquea la interfaz.
+- **Límite conocido.** Las operaciones se envían mientras la app está abierta o al
+  volver a abrirla. Con la app cerrada no se ejecuta nada; quedan guardadas en SQLite.
+- **Cerrar sesión** vacía la cola: las acciones pendientes no se envían con otra cuenta.
+- Solo pasan por la cola los likes y los comentarios. Publicar, seguir y cambiar la
+  privacidad necesitan conexión.
 
 ## Navegación
 

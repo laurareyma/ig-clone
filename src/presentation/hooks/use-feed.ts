@@ -34,7 +34,6 @@ export function useFeed(kind: Feed['kind'], userId?: string) {
   const [posts, setPosts] = useState<Post[]>();
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [offline, setOffline] = useState(false);
   const hasMore = useRef(true);
   const busy = useRef(false);
 
@@ -46,10 +45,8 @@ export function useFeed(kind: Feed['kind'], userId?: string) {
     setRefreshing(true);
     try {
       hasMore.current = (await repository.refreshFeed(feed)).hasMore;
-      setOffline(false);
     } catch {
       // Sin conexión: la lista sigue mostrando lo guardado en el dispositivo.
-      setOffline(true);
     } finally {
       busy.current = false;
       setRefreshing(false);
@@ -65,7 +62,7 @@ export function useFeed(kind: Feed['kind'], userId?: string) {
     try {
       hasMore.current = (await repository.loadMoreFeed(feed)).hasMore;
     } catch {
-      setOffline(true);
+      // Se reintenta la próxima vez que la lista llegue al final.
     } finally {
       busy.current = false;
       setLoadingMore(false);
@@ -82,13 +79,12 @@ export function useFeed(kind: Feed['kind'], userId?: string) {
     repository.refreshFeed(target).then(
       (page) => {
         hasMore.current = page.hasMore;
-        setOffline(false);
       },
-      () => setOffline(true),
+      () => {},
     );
 
     return unsubscribe;
   }, [repository, kind, userId]);
 
-  return { posts, refreshing, loadingMore, offline, refresh, loadMore };
+  return { posts, refreshing, loadingMore, refresh, loadMore };
 }

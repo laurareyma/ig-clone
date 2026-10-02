@@ -32,6 +32,7 @@ beforeEach(() => {
   data.post.set(null);
   data.comments.set([]);
   data.details.set(ownDetails);
+  data.syncStatus.set({ online: true, pendingCount: 0 });
   data.followRequests = [];
   data.searchResults = [];
 });
@@ -78,14 +79,27 @@ describe('feed de Inicio', () => {
     expect(screen.getByText(/Busca a alguien en Explorar/)).toBeTruthy();
   });
 
-  it('si el servidor no responde, avisa y sigue mostrando lo guardado', async () => {
+  it('sin conexión avisa y sigue mostrando lo guardado', async () => {
     data.feed('home').set([postFixture('p1', 1, { caption: 'Guardada' })]);
     jest.spyOn(posts, 'refreshFeed').mockRejectedValue(new Error('sin conexión'));
+    data.syncStatus.set({ online: false, pendingCount: 0 });
 
     await open('/');
 
-    expect(screen.getByText(/Sin conexión/)).toBeTruthy();
+    expect(screen.getByText(/Sin conexión. Mostrando lo guardado/)).toBeTruthy();
     expect(screen.getByText(/Guardada/)).toBeTruthy();
+  });
+
+  it('indica cuántas acciones esperan en la cola y avisa cuando se están enviando', async () => {
+    data.syncStatus.set({ online: false, pendingCount: 2 });
+    await open('/');
+    expect(screen.getByText('Sin conexión. 2 acciones se enviarán al reconectar.')).toBeTruthy();
+
+    await act(async () => data.syncStatus.set({ online: true, pendingCount: 1 }));
+    expect(screen.getByText('Enviando 1 acción…')).toBeTruthy();
+
+    await act(async () => data.syncStatus.set({ online: true, pendingCount: 0 }));
+    expect(screen.queryByText(/Enviando|Sin conexión/)).toBeNull();
   });
 
   it('comentar abre la publicación dentro de la misma pestaña', async () => {
@@ -144,9 +158,18 @@ describe('pantalla de publicación', () => {
     expect(add).toHaveBeenCalledWith({ postId: 'p1', body: 'Gracias', parentId: 'c1' });
   });
 
-  it('si falla el envío, devuelve el texto al campo para reintentar', async () => {
+  it('un comentario aún no enviado se marca como tal', async () => {
     data.post.set(post);
-    jest.spyOn(comments, 'add').mockRejectedValue(new Error('sin conexión'));
+    data.comments.set([commentFixture('c1', 1, { pending: true })]);
+
+    await open('/post/p1');
+
+    expect(screen.getByText('Enviando…')).toBeTruthy();
+  });
+
+  it('si no se puede guardar, devuelve el texto al campo para reintentar', async () => {
+    data.post.set(post);
+    jest.spyOn(comments, 'add').mockRejectedValue(new Error('fallo local'));
     await open('/post/p1');
 
     await fireEvent.changeText(screen.getByLabelText('Comentario'), 'Hola');

@@ -2,6 +2,7 @@ import { upsertProfiles } from '@/data/local/profile-store';
 import type { SqlExecutor } from '@/data/local/sql-database';
 import { commentFromLocal, type LocalCommentRow } from '@/data/mappers/post';
 import { AUTHOR_COLUMNS } from '@/data/mappers/profile';
+import { COMMENT } from '@/data/sync/operations';
 import type { Comment } from '@/domain/entities';
 
 // Devuelve false si el comentario ya estaba guardado.
@@ -22,12 +23,18 @@ export async function insertComment(db: SqlExecutor, comment: Comment): Promise<
   return changes > 0;
 }
 
+// Los comentarios que aún esperan en la cola no se tocan: el servidor todavía no los
+// conoce, así que su ausencia en la respuesta no significa que se hayan borrado.
 export async function replaceComments(
   db: SqlExecutor,
   postId: string,
   comments: Comment[],
 ): Promise<void> {
-  await db.runAsync('DELETE FROM comments WHERE post_id = ?', [postId]);
+  await db.runAsync(
+    `DELETE FROM comments
+     WHERE post_id = ? AND id NOT IN (SELECT entity_id FROM outbox WHERE type = '${COMMENT}')`,
+    [postId],
+  );
   for (const comment of comments) await insertComment(db, comment);
 }
 
@@ -45,7 +52,11 @@ export async function deleteComment(db: SqlExecutor, commentId: string): Promise
 
 export async function readComments(db: SqlExecutor, postId: string): Promise<Comment[]> {
   const rows = await db.getAllAsync<LocalCommentRow>(
-    `SELECT c.*, ${AUTHOR_COLUMNS} FROM comments c JOIN profiles a ON a.id = c.author_id
+    `SELECT c.*, ${AUTHOR_COLUMNS},
+       EXISTS (
+         SELECT 1 FROM outbox o WHERE o.type = '${COMMENT}' AND o.entity_id = c.id
+       ) AS pending
+     FROM comments c JOIN profiles a ON a.id = c.author_id
      WHERE c.post_id = ? ORDER BY c.created_at ASC, c.id ASC`,
     [postId],
   );

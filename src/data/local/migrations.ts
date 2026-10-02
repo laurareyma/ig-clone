@@ -74,6 +74,23 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    // Cola de sincronización: acciones del usuario aún no confirmadas por el servidor.
+    // El id autoincremental es el orden cronológico en que se hicieron y se enviarán.
+    sql: `
+      CREATE TABLE outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      );
+      CREATE INDEX outbox_entity ON outbox (type, entity_id);
+    `,
+  },
 ];
 
 // Tablas con datos del usuario; se vacían al cerrar sesión. image_cache no está aquí
@@ -84,6 +101,8 @@ export const userTables = [
   'posts',
   'feed_entries',
   'comments',
+  // Las acciones pendientes son de quien las hizo: no deben enviarse con otra sesión.
+  'outbox',
 ] as const;
 
 // La versión aplicada se guarda en PRAGMA user_version, dentro del propio archivo.

@@ -1,6 +1,7 @@
 import type { ChangeNotifier } from '@/data/local/change-notifier';
 import {
   addToFeed,
+  adjustCommentsCount,
   clearFeed,
   deletePost,
   readFeed,
@@ -9,10 +10,12 @@ import {
   setLiked,
   upsertPosts,
 } from '@/data/local/post-store';
-import type { SqlDatabase } from '@/data/local/sql-database';
+import type { SqlDatabase, SqlExecutor } from '@/data/local/sql-database';
 import { watchQuery } from '@/data/local/watch-query';
 import type { PostImageUploader } from '@/data/remote/post-image-uploader';
 import type { PostQuery, PostRemoteSource } from '@/data/remote/post-source';
+import { COMMENT, LIKE, type CommentPayload, type LikePayload } from '@/data/sync/operations';
+import type { Outbox } from '@/data/sync/outbox';
 import type { Post } from '@/domain/entities';
 import {
   feedKey,
@@ -36,9 +39,26 @@ export class OfflineFirstPostRepository implements PostRepository {
     private readonly remote: PostRemoteSource,
     private readonly uploader: PostImageUploader,
     private readonly changes: ChangeNotifier,
+    private readonly outbox: Outbox,
     private readonly newId: () => string,
     private readonly pageSize = PAGE_SIZE,
-  ) {}
+  ) {
+    outbox.register<LikePayload>(LIKE, {
+      // Solo cambia la fila si el estado es distinto, así repetirlo no cuenta doble.
+      applyLocal: async (tx, { postId, liked }) => void (await setLiked(tx, postId, liked)),
+      // Idempotente en el servidor: repetir un like no falla ni suma (clave primaria
+      // post_id + user_id) y borrar uno que no existe no hace nada.
+      send: ({ postId, liked }) => this.remote.setLiked(postId, liked),
+      // Rechazado (el post se borró o dejó de ser visible): se trae la verdad del
+      // servidor. Si no se puede, al menos se deshace el cambio local.
+      discard: ({ postId, liked }) =>
+        this.refreshPost(postId).catch(async () => {
+          await setLiked(await this.getDb(), postId, !liked);
+          this.changes.notify('posts');
+        }),
+      tables: ['posts'],
+    });
+  }
 
   watchFeed(feed: Feed, listener: (posts: Post[]) => void): () => void {
     return watchQuery(
@@ -58,7 +78,7 @@ export class OfflineFirstPostRepository implements PostRepository {
     // o de una cuenta que se volvió privada) desaparece. En una sola transacción para
     // que la UI nunca lea la lista vacía a medio reemplazar.
     await db.withTransactionAsync(async (tx) => {
-      await upsertPosts(tx, posts);
+      await this.saveFromServer(tx, posts);
       await clearFeed(tx, key);
       await addToFeed(
         tx,
@@ -84,7 +104,7 @@ export class OfflineFirstPostRepository implements PostRepository {
     });
 
     await db.withTransactionAsync(async (tx) => {
-      await upsertPosts(tx, posts);
+      await this.saveFromServer(tx, posts);
       await addToFeed(
         tx,
         key,
@@ -111,27 +131,19 @@ export class OfflineFirstPostRepository implements PostRepository {
 
     await db.withTransactionAsync((tx) =>
       // Si el servidor no la devuelve, se borró o este usuario ya no puede verla.
-      post ? upsertPosts(tx, [post]) : deletePost(tx, postId),
+      post ? this.saveFromServer(tx, [post]) : deletePost(tx, postId),
     );
     this.changes.notify('posts');
   }
 
   async setLiked(postId: string, liked: boolean): Promise<void> {
-    const db = await this.getDb();
+    const post = await readPost(await this.getDb(), postId);
+    // Ya está en ese estado: no hay nada que enviar.
+    if (!post || post.likedByMe === liked) return;
 
-    // Primero el cambio local: la UI lo refleja al instante, sin esperar a la red.
-    const changed = await setLiked(db, postId, liked);
-    if (!changed) return;
-    this.changes.notify('posts');
-
-    try {
-      await this.remote.setLiked(postId, liked);
-    } catch (error) {
-      // El servidor no lo aceptó: se deshace para no mostrar un estado falso.
-      await setLiked(db, postId, !liked);
-      this.changes.notify('posts');
-      throw error;
-    }
+    // El cambio local y la operación pendiente se guardan juntos; el envío al servidor
+    // lo hace la cola, ahora o cuando vuelva la conexión.
+    await this.outbox.enqueue<LikePayload>(LIKE, postId, { postId, liked });
   }
 
   async create(post: NewPost): Promise<void> {
@@ -166,10 +178,25 @@ export class OfflineFirstPostRepository implements PostRepository {
 
     const db = await this.getDb();
     await db.withTransactionAsync(async (tx) => {
-      await upsertPosts(tx, [created]);
+      await this.saveFromServer(tx, [created]);
       await addToFeed(tx, feedKey({ kind: 'home' }), [id]);
       await addToFeed(tx, feedKey({ kind: 'author', userId }), [id]);
     });
     this.changes.notify('posts');
+  }
+
+  // Guarda lo que llega del servidor y vuelve a aplicar encima las acciones que siguen en
+  // la cola. El servidor aún no las conoce, así que sus datos las "deshacen": sin esto,
+  // refrescar sin conexión estable haría parpadear un like recién dado.
+  private async saveFromServer(tx: SqlExecutor, posts: Post[]): Promise<void> {
+    await upsertPosts(tx, posts);
+    const saved = new Set(posts.map((post) => post.id));
+
+    for (const like of await this.outbox.pending<LikePayload>(tx, LIKE)) {
+      if (saved.has(like.postId)) await setLiked(tx, like.postId, like.liked);
+    }
+    for (const comment of await this.outbox.pending<CommentPayload>(tx, COMMENT)) {
+      if (saved.has(comment.postId)) await adjustCommentsCount(tx, comment.postId, 1);
+    }
   }
 }

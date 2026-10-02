@@ -47,6 +47,8 @@ export type Comment = {
   parentId: string | null;
   body: string;
   createdAt: string;
+  // Guardado en el dispositivo pero aún no confirmado por el servidor.
+  pending: boolean;
 };
 
 export type Story = {

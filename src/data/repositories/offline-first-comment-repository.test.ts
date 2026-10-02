@@ -7,6 +7,7 @@ import { OfflineFirstCommentRepository } from '@/data/repositories/offline-first
 import type { Comment } from '@/domain/entities';
 import { commentFixture, postFixture, profileFixture } from '@/testing/fixtures';
 import { createTestDatabase } from '@/testing/node-sqlite';
+import { createTestOutbox } from '@/testing/test-outbox';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const me = profileFixture('ana');
@@ -30,11 +31,14 @@ async function setup(serverComments: Comment[] = []) {
   };
   const profiles = { fetchProfile: jest.fn(async (id: string) => profileFixture(id)) };
   let nextId = 0;
+  const changes = new ChangeNotifier();
+  const queue = createTestOutbox(db, changes);
   const repository = new OfflineFirstCommentRepository(
     async () => db,
     remote,
     profiles,
-    new ChangeNotifier(),
+    changes,
+    queue.outbox,
     () => `local-${++nextId}`,
     () => '2026-01-01T00:30:00.000Z',
   );
@@ -58,7 +62,15 @@ async function setup(serverComments: Comment[] = []) {
     createdAt: '2026-01-01T00:40:00+00:00',
   });
 
+  const synced = async () => {
+    await settle();
+    await queue.outbox.process();
+    await settle();
+  };
+
   return {
+    ...queue,
+    synced,
     repository,
     remote,
     profiles,
@@ -92,13 +104,12 @@ describe('comentarios guardados', () => {
 });
 
 describe('publicar un comentario', () => {
-  it('aparece en local, con el contador, antes de que responda el servidor', async () => {
-    const { repository, remote, shown, count } = await setup();
+  it('aparece al instante, marcado como pendiente y sumado al contador', async () => {
+    const { repository, remote, shown, count, synced } = await setup();
     let respond!: () => void;
     remote.insertComment.mockReturnValue(new Promise<void>((resolve) => (respond = resolve)));
 
-    const pending = repository.add({ postId: 'p1', body: 'hola', parentId: 'c1' });
-    await settle();
+    await repository.add({ postId: 'p1', body: 'hola', parentId: 'c1' });
 
     expect(await shown()).toEqual([
       {
@@ -108,31 +119,82 @@ describe('publicar un comentario', () => {
         parentId: 'c1',
         body: 'hola',
         createdAt: '2026-01-01T00:30:00.000Z',
+        pending: true,
       },
     ]);
     expect(await count()).toBe(1);
     respond();
-    await pending;
+    await synced();
   });
 
-  it('envía al servidor el mismo id que guardó en local', async () => {
-    const { repository, remote } = await setup();
+  it('cuando el servidor lo confirma deja de estar pendiente', async () => {
+    const { repository, remote, shown, synced } = await setup();
 
     await repository.add({ postId: 'p1', body: 'hola', parentId: null });
+    await synced();
 
     expect(remote.insertComment).toHaveBeenCalledWith(expect.objectContaining({ id: 'local-1' }));
+    expect(await shown()).toMatchObject([{ id: 'local-1', pending: false }]);
   });
 
-  it('si el servidor falla, se retira y el contador vuelve atrás', async () => {
-    const { repository, remote, shown, count } = await setup();
-    remote.insertComment.mockRejectedValue(new Error('sin conexión'));
+  it('sin conexión se guarda en la cola y se envía, en orden, al reconectar', async () => {
+    const { repository, remote, shown, rows, setOnline, outbox, synced } = await setup();
+    outbox.start();
+    setOnline(false);
 
-    await expect(repository.add({ postId: 'p1', body: 'hola', parentId: null })).rejects.toThrow(
-      'sin conexión',
-    );
+    await repository.add({ postId: 'p1', body: 'primero', parentId: null });
+    await repository.add({ postId: 'p1', body: 'segundo', parentId: 'local-1' });
+
+    expect((await shown()).map((comment) => comment.pending)).toEqual([true, true]);
+    expect(remote.insertComment).not.toHaveBeenCalled();
+    expect(await rows()).toMatchObject([{ entity_id: 'local-1' }, { entity_id: 'local-2' }]);
+
+    setOnline(true);
+    await synced();
+
+    // La respuesta va después del comentario al que responde: si llegara antes, la
+    // clave foránea del servidor la rechazaría.
+    expect(remote.insertComment.mock.calls.map(([comment]) => comment.body)).toEqual([
+      'primero',
+      'segundo',
+    ]);
+    expect((await shown()).map((comment) => comment.pending)).toEqual([false, false]);
+  });
+
+  it('refrescar no borra un comentario que sigue en la cola', async () => {
+    const server = [commentFixture('c1', 1)];
+    const { repository, shown, count, setOnline } = await setup(server);
+    setOnline(false);
+    await repository.add({ postId: 'p1', body: 'hola', parentId: null });
+
+    // El servidor aún no lo conoce: su lista no lo incluye.
+    await repository.refresh('p1');
+
+    expect((await shown()).map((comment) => comment.id)).toEqual(['c1', 'local-1']);
+    expect(await count()).toBe(2);
+  });
+
+  it('si el servidor lo rechaza, se retira y el contador vuelve atrás', async () => {
+    const { repository, remote, shown, count, rows, synced } = await setup();
+    remote.insertComment.mockRejectedValue({ code: '23503', message: 'foreign key violation' });
+
+    await repository.add({ postId: 'p1', body: 'hola', parentId: null });
+    await synced();
 
     expect(await shown()).toEqual([]);
     expect(await count()).toBe(0);
+    expect(await rows()).toEqual([]);
+  });
+
+  it('un fallo de red lo deja pendiente, sin perderlo', async () => {
+    const { repository, remote, shown, count, synced } = await setup();
+    remote.insertComment.mockRejectedValue(new TypeError('Network request failed'));
+
+    await repository.add({ postId: 'p1', body: 'hola', parentId: null });
+    await synced();
+
+    expect(await shown()).toMatchObject([{ id: 'local-1', pending: true }]);
+    expect(await count()).toBe(1);
   });
 });
 

@@ -36,6 +36,7 @@ export type LocalCommentRow = AuthorColumns & {
   parent_id: string | null;
   body: string;
   created_at: string;
+  pending: number;
 };
 
 export function commentFromLocal(row: LocalCommentRow): Comment {
@@ -46,5 +47,6 @@ export function commentFromLocal(row: LocalCommentRow): Comment {
     parentId: row.parent_id,
     body: row.body,
     createdAt: row.created_at,
+    pending: row.pending === 1,
   };
 }

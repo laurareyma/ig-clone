@@ -31,8 +31,8 @@ function PostCardImpl({ post, showCommentsLink = true }: Props) {
   const postHref = { pathname: '/post/[id]', params: { id: post.id } } as const;
 
   function toggleLike() {
-    // El repositorio actualiza la base local al instante y deshace el cambio si el
-    // servidor lo rechaza, así que aquí no hay estado ni nada que revertir.
+    // El repositorio guarda el cambio en la base local y lo deja en la cola de envío:
+    // la tarjeta se actualiza al instante, con o sin conexión, sin estado propio.
     posts.setLiked(post.id, !post.likedByMe).catch(() => {});
   }
 

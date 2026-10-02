@@ -58,6 +58,7 @@ export class SupabaseCommentSource implements CommentRemoteSource {
       parentId: row.parent_id,
       body: row.body,
       createdAt: row.created_at,
+      pending: false,
     }));
   }
 

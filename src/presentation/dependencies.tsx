@@ -5,6 +5,7 @@ import type { CommentRepository } from '@/domain/repositories/comment-repository
 import type { ImageCache } from '@/domain/repositories/image-cache';
 import type { PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
+import type { SyncMonitor } from '@/domain/repositories/sync-monitor';
 
 // La UI solo conoce los contratos del dominio. Las implementaciones concretas las
 // entrega src/di/container.ts desde el layout raíz, y las pruebas pueden pasar otras.
@@ -14,6 +15,7 @@ export type Dependencies = {
   posts: PostRepository;
   comments: CommentRepository;
   images: ImageCache;
+  sync: SyncMonitor;
 };
 
 const DependenciesContext = createContext<Dependencies | null>(null);

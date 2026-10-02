@@ -4,14 +4,14 @@ import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 
 import { EmptyState } from '@/presentation/components/empty-state';
 import { Icon } from '@/presentation/components/icon';
-import { OfflineBanner } from '@/presentation/components/offline-banner';
 import { PostCard } from '@/presentation/components/post-card';
+import { SyncBanner } from '@/presentation/components/sync-banner';
 import { ThemedView } from '@/presentation/components/themed-view';
 import { useFeed } from '@/presentation/hooks/use-feed';
 import { Spacing } from '@/presentation/theme';
 
 export function FeedScreen() {
-  const { posts, refreshing, loadingMore, offline, refresh, loadMore } = useFeed('home');
+  const { posts, refreshing, loadingMore, refresh, loadMore } = useFeed('home');
 
   return (
     <ThemedView style={styles.fill}>
@@ -27,7 +27,7 @@ export function FeedScreen() {
           ),
         }}
       />
-      {offline && <OfflineBanner />}
+      <SyncBanner />
       {posts === undefined ? (
         <ActivityIndicator style={styles.loading} />
       ) : (

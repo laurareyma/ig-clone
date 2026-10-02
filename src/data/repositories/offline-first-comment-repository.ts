@@ -10,6 +10,8 @@ import { readProfile } from '@/data/local/profile-store';
 import type { SqlDatabase } from '@/data/local/sql-database';
 import { watchQuery } from '@/data/local/watch-query';
 import type { CommentRemoteSource, RemoteCommentEvent } from '@/data/remote/comment-source';
+import { COMMENT, type CommentPayload } from '@/data/sync/operations';
+import type { Outbox } from '@/data/sync/outbox';
 import type { Comment, Profile } from '@/domain/entities';
 import type { CommentRepository, NewComment } from '@/domain/repositories/comment-repository';
 
@@ -21,9 +23,27 @@ export class OfflineFirstCommentRepository implements CommentRepository {
     private readonly remote: CommentRemoteSource,
     private readonly profiles: ProfileFetcher,
     private readonly changes: ChangeNotifier,
+    private readonly outbox: Outbox,
     private readonly newId: () => string,
     private readonly now: () => string = () => new Date().toISOString(),
-  ) {}
+  ) {
+    outbox.register<CommentPayload>(COMMENT, {
+      applyLocal: async (tx, comment) => {
+        if (await insertComment(tx, comment)) await adjustCommentsCount(tx, comment.postId, 1);
+      },
+      // El id lo generó el cliente: si se reenvía, el servidor ignora el duplicado.
+      send: (comment) => this.remote.insertComment(comment),
+      // Rechazado (el post se borró o dejó de ser visible): se retira de la copia local.
+      discard: async (comment) => {
+        const db = await this.getDb();
+        await db.withTransactionAsync(async (tx) => {
+          if (await deleteComment(tx, comment.id)) await adjustCommentsCount(tx, comment.postId, -1);
+        });
+        this.notify();
+      },
+      tables: ['comments', 'posts'],
+    });
+  }
 
   watch(postId: string, listener: (comments: Comment[]) => void): () => void {
     return watchQuery(
@@ -43,7 +63,6 @@ export class OfflineFirstCommentRepository implements CommentRepository {
   }
 
   async add({ postId, body, parentId }: NewComment): Promise<void> {
-    const db = await this.getDb();
     const author = await this.profileOf(await this.remote.currentUserId());
     if (!author) throw new Error('No se encontró el perfil del usuario actual');
 
@@ -54,25 +73,12 @@ export class OfflineFirstCommentRepository implements CommentRepository {
       parentId,
       body,
       createdAt: this.now(),
+      pending: true,
     };
 
-    // Primero en local, para que aparezca al instante.
-    await db.withTransactionAsync(async (tx) => {
-      await insertComment(tx, comment);
-      await adjustCommentsCount(tx, postId, 1);
-    });
-    this.notify();
-
-    try {
-      await this.remote.insertComment(comment);
-    } catch (error) {
-      await db.withTransactionAsync(async (tx) => {
-        await deleteComment(tx, comment.id);
-        await adjustCommentsCount(tx, postId, -1);
-      });
-      this.notify();
-      throw error;
-    }
+    // Se guarda en local junto con la operación pendiente y aparece al instante; el
+    // envío lo hace la cola, ahora o cuando vuelva la conexión.
+    await this.outbox.enqueue<CommentPayload>(COMMENT, comment.id, comment);
   }
 
   subscribe(postId: string): () => void {
@@ -94,7 +100,7 @@ export class OfflineFirstCommentRepository implements CommentRepository {
     await db.withTransactionAsync(async (tx) => {
       // Realtime también devuelve los comentarios propios, que ya se guardaron en add().
       // Como el id es el mismo, no se insertan ni se cuentan dos veces.
-      inserted = await insertComment(tx, { ...event, author });
+      inserted = await insertComment(tx, { ...event, author, pending: false });
       if (inserted) await adjustCommentsCount(tx, event.postId, 1);
     });
     if (inserted) this.notify();

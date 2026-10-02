@@ -41,6 +41,7 @@ export function commentFixture(
     parentId: null,
     body: `comentario ${id}`,
     createdAt: `2026-01-01T00:${String(minute).padStart(2, '0')}:00+00:00`,
+    pending: false,
     ...overrides,
   };
 }

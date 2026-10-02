@@ -17,6 +17,7 @@ const comment = (id: string, minute: number, parentId: string | null = null): Co
   parentId,
   body: id,
   createdAt: `2026-01-01T00:${String(minute).padStart(2, '0')}:00+00:00`,
+  pending: false,
 });
 
 const shape = (comments: Comment[]) =>

@@ -1,4 +1,5 @@
 import { randomUUID } from 'expo-crypto';
+import { AppState } from 'react-native';
 
 import { ExpoImageFiles } from '@/data/image-cache/expo-image-files';
 import { TwoLevelImageCache } from '@/data/image-cache/two-level-image-cache';
@@ -14,11 +15,14 @@ import { OfflineFirstCommentRepository } from '@/data/repositories/offline-first
 import { OfflineFirstPostRepository } from '@/data/repositories/offline-first-post-repository';
 import { OfflineFirstProfileRepository } from '@/data/repositories/offline-first-profile-repository';
 import { SupabaseAuthRepository } from '@/data/repositories/supabase-auth-repository';
+import { NetInfoConnectivity } from '@/data/sync/net-info-connectivity';
+import { Outbox } from '@/data/sync/outbox';
 import type { Dependencies } from '@/presentation/dependencies';
 
 // Raíz de composición: el único archivo que conoce a la vez las implementaciones de
 // data/ y los contratos que consume presentation/.
 const changes = new ChangeNotifier();
+const outbox = new Outbox(getDatabase, changes, new NetInfoConnectivity());
 const auth = new SupabaseAuthRepository(supabase);
 const profileSource = new SupabaseProfileSource(supabase);
 const profiles = new OfflineFirstProfileRepository(getDatabase, profileSource, changes);
@@ -27,6 +31,7 @@ const posts = new OfflineFirstPostRepository(
   new SupabasePostSource(supabase),
   new ExpoPostImageUploader(supabase),
   changes,
+  outbox,
   randomUUID,
 );
 const comments = new OfflineFirstCommentRepository(
@@ -34,6 +39,7 @@ const comments = new OfflineFirstCommentRepository(
   new SupabaseCommentSource(supabase),
   profileSource,
   changes,
+  outbox,
   randomUUID,
 );
 
@@ -54,4 +60,11 @@ auth.onSessionChange((session) => {
   void images.clear();
 });
 
-export const container: Dependencies = { auth, profiles, posts, comments, images };
+// La cola envía lo pendiente al arrancar, al recuperar la conexión y cada vez que la app
+// vuelve a primer plano (el sistema pudo suspenderla con operaciones a medias).
+outbox.start();
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') void outbox.resume();
+});
+
+export const container: Dependencies = { auth, profiles, posts, comments, images, sync: outbox };

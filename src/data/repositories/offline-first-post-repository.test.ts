@@ -6,6 +6,7 @@ import type { Post } from '@/domain/entities';
 import type { Feed } from '@/domain/repositories/post-repository';
 import { postFixture, profileFixture } from '@/testing/fixtures';
 import { createTestDatabase } from '@/testing/node-sqlite';
+import { createTestOutbox } from '@/testing/test-outbox';
 
 const home: Feed = { kind: 'home' };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -50,14 +51,23 @@ async function setup(initial: Post[] = [], pageSize = 2) {
     upload: jest.fn(async () => ({ width: 1080, height: 1350 })),
     remove: jest.fn(async () => {}),
   };
+  const changes = new ChangeNotifier();
+  const queue = createTestOutbox(db, changes);
   const repository = new OfflineFirstPostRepository(
     async () => db,
     server.remote,
     uploader,
-    new ChangeNotifier(),
+    changes,
+    queue.outbox,
     () => 'nuevo-id',
     pageSize,
   );
+  // Espera a que la cola termine de enviar lo que pueda.
+  const synced = async () => {
+    await settle();
+    await queue.outbox.process();
+    await settle();
+  };
 
   // Lo que la UI vería ahora mismo en esa lista.
   const shown = async (feed: Feed = home) => {
@@ -69,7 +79,7 @@ async function setup(initial: Post[] = [], pageSize = 2) {
   };
   const ids = async (feed?: Feed) => (await shown(feed)).map((post) => post.id);
 
-  return { ...server, db, repository, uploader, shown, ids };
+  return { ...server, ...queue, db, repository, uploader, shown, ids, synced };
 }
 
 const five = [1, 2, 3, 4, 5].map((n) => postFixture(`p${n}`, n));
@@ -176,46 +186,149 @@ describe('una publicación', () => {
 });
 
 describe('like', () => {
-  it('se refleja en local antes de que responda el servidor', async () => {
-    const { repository, shown, remote } = await setup(five);
+  const rejected = { code: '42501', message: 'new row violates row-level security policy' };
+
+  it('se ve al instante, antes de que responda el servidor', async () => {
+    const { repository, shown, remote, synced } = await setup(five);
     await repository.refreshFeed(home);
     let respond!: () => void;
     remote.setLiked.mockReturnValue(new Promise<void>((resolve) => (respond = resolve)));
 
-    const pending = repository.setLiked('p5', true);
-    await settle();
+    await repository.setLiked('p5', true);
 
     expect((await shown())[0]).toMatchObject({ id: 'p5', likedByMe: true, likesCount: 1 });
     respond();
-    await pending;
+    await synced();
   });
 
-  it('si el servidor falla, se deshace', async () => {
-    const { repository, shown, remote } = await setup(five);
+  it('sin conexión se guarda en la cola y se envía al reconectar', async () => {
+    const { repository, shown, remote, rows, setOnline, outbox, synced } = await setup(five);
+    outbox.start();
     await repository.refreshFeed(home);
-    remote.setLiked.mockRejectedValue(new Error('sin conexión'));
+    setOnline(false);
 
-    await expect(repository.setLiked('p5', true)).rejects.toThrow('sin conexión');
+    await repository.setLiked('p5', true);
 
-    expect((await shown())[0]).toMatchObject({ likedByMe: false, likesCount: 0 });
+    expect((await shown())[0]).toMatchObject({ likedByMe: true, likesCount: 1 });
+    expect(await rows()).toMatchObject([{ type: 'like', entity_id: 'p5' }]);
+    expect(remote.setLiked).not.toHaveBeenCalled();
+
+    setOnline(true);
+    await synced();
+
+    expect(remote.setLiked).toHaveBeenCalledWith('p5', true);
+    expect(await rows()).toEqual([]);
   });
 
-  it('repetir el mismo like no cuenta doble ni vuelve a llamar al servidor', async () => {
-    const { repository, shown, remote } = await setup(five);
+  it('dar y quitar el like sin conexión llega al servidor en ese orden', async () => {
+    const { repository, shown, remote, setOnline, outbox, synced } = await setup(five);
+    outbox.start();
+    await repository.refreshFeed(home);
+    setOnline(false);
+
+    await repository.setLiked('p5', true);
+    await repository.setLiked('p5', false);
+    await repository.setLiked('p4', true);
+    setOnline(true);
+    await synced();
+
+    expect(remote.setLiked.mock.calls).toEqual([
+      ['p5', true],
+      ['p5', false],
+      ['p4', true],
+    ]);
+    expect((await shown())[0]).toMatchObject({ id: 'p5', likedByMe: false, likesCount: 0 });
+  });
+
+  it('un fallo de red no deshace el like: sigue en la cola', async () => {
+    const { repository, shown, remote, rows, retries, synced } = await setup(five);
+    await repository.refreshFeed(home);
+    remote.setLiked.mockRejectedValue(new TypeError('Network request failed'));
+
+    await repository.setLiked('p5', true);
+    await synced();
+
+    expect((await shown())[0]).toMatchObject({ likedByMe: true, likesCount: 1 });
+    expect(await rows()).toMatchObject([{ entity_id: 'p5', attempts: 1 }]);
+    expect(retries).toHaveLength(1);
+  });
+
+  it('refrescar con un like pendiente no lo hace desaparecer', async () => {
+    const { repository, shown, setOnline } = await setup(five);
+    await repository.refreshFeed(home);
+    setOnline(false);
+    await repository.setLiked('p5', true);
+
+    // El servidor todavía no sabe del like: devuelve liked_by_me = false y 0 likes.
+    await repository.refreshFeed(home);
+    await repository.refreshPost('p5');
+
+    expect((await shown())[0]).toMatchObject({ id: 'p5', likedByMe: true, likesCount: 1 });
+  });
+
+  it('refrescar con un comentario pendiente conserva el contador', async () => {
+    const { repository, shown, db, setOnline, outbox } = await setup(five);
+    outbox.register('comment', {
+      applyLocal: async (tx) =>
+        void (await tx.runAsync("UPDATE posts SET comments_count = comments_count + 1 WHERE id = 'p5'", [])),
+      send: async () => {},
+      discard: async () => {},
+      tables: ['posts'],
+    });
+    await repository.refreshFeed(home);
+    setOnline(false);
+    await outbox.enqueue('comment', 'c1', { id: 'c1', postId: 'p5' });
+    expect(await db.getFirstAsync('SELECT comments_count FROM posts WHERE id = ?', ['p5'])).toEqual(
+      { comments_count: 1 },
+    );
+
+    await repository.refreshFeed(home);
+
+    expect((await shown())[0]).toMatchObject({ id: 'p5', commentsCount: 1 });
+  });
+
+  it('si el servidor lo rechaza, la copia local vuelve a lo que diga el servidor', async () => {
+    const { repository, shown, remote, rows, synced } = await setup(five);
+    await repository.refreshFeed(home);
+    remote.setLiked.mockRejectedValue(rejected);
+
+    await repository.setLiked('p5', true);
+    await synced();
+
+    expect((await shown())[0]).toMatchObject({ id: 'p5', likedByMe: false, likesCount: 0 });
+    expect(await rows()).toEqual([]);
+  });
+
+  it('si se rechaza porque la publicación ya no existe, desaparece de la lista', async () => {
+    const { repository, ids, remote, state, synced } = await setup(five);
+    await repository.refreshFeed(home);
+    state.posts = state.posts.filter((post) => post.id !== 'p5');
+    remote.setLiked.mockRejectedValue({ code: '23503', message: 'foreign key violation' });
+
+    await repository.setLiked('p5', true);
+    await synced();
+
+    expect(await ids()).toEqual(['p4']);
+  });
+
+  it('repetir el mismo like no cuenta doble ni encola otra operación', async () => {
+    const { repository, shown, remote, synced } = await setup(five);
     await repository.refreshFeed(home);
 
     await repository.setLiked('p5', true);
     await repository.setLiked('p5', true);
+    await synced();
 
     expect((await shown())[0].likesCount).toBe(1);
     expect(remote.setLiked).toHaveBeenCalledTimes(1);
   });
 
   it('quitar el like resta, sin bajar de cero', async () => {
-    const { repository, shown } = await setup([postFixture('p1', 1, { likedByMe: true })]);
+    const { repository, shown, synced } = await setup([postFixture('p1', 1, { likedByMe: true })]);
     await repository.refreshFeed(home);
 
     await repository.setLiked('p1', false);
+    await synced();
 
     expect((await shown())[0]).toMatchObject({ likedByMe: false, likesCount: 0 });
   });

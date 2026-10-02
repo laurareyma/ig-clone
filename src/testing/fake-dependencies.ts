@@ -4,6 +4,7 @@ import type { CommentRepository } from '@/domain/repositories/comment-repository
 import type { ImageCache } from '@/domain/repositories/image-cache';
 import { feedKey, type PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
+import type { SyncMonitor, SyncStatus } from '@/domain/repositories/sync-monitor';
 
 export const testSession: Session = { userId: 'user-1', email: 'ana@example.com' };
 
@@ -59,6 +60,7 @@ export function createFakeDependencies() {
       followingCount: 0,
       followStatus: 'self',
     }),
+    syncStatus: observable<SyncStatus>({ online: true, pendingCount: 0 }),
     followRequests: [] as Profile[],
     searchResults: [] as Profile[],
   };
@@ -127,10 +129,14 @@ export function createFakeDependencies() {
     clear: async () => {},
   };
 
+  const sync: SyncMonitor = {
+    watchStatus: (listener) => data.syncStatus.watch(listener),
+  };
+
   // Vuelve al estado de arranque: todavía no se sabe si hay sesión guardada.
   const resetSession = () => {
     session = undefined;
   };
 
-  return { auth, profiles, posts, comments, images, data, setSession, resetSession };
+  return { auth, profiles, posts, comments, images, sync, data, setSession, resetSession };
 }
