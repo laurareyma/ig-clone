@@ -1,10 +1,1 @@
-import { PlaceholderScreen } from '@/presentation/components/placeholder-screen';
-
-export default function ProfileScreen() {
-  return (
-    <PlaceholderScreen
-      title="Perfil"
-      links={[{ href: '/(profile)/post/demo', label: 'Abrir un post en esta pestaña' }]}
-    />
-  );
-}
+export { ProfileScreen as default } from '@/presentation/screens/profile-screen';

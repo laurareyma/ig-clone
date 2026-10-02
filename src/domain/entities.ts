@@ -1,5 +1,10 @@
 // Entidades del dominio. No dependen de Supabase, SQLite ni React.
 
+export type Session = {
+  userId: string;
+  email: string | null;
+};
+
 export type FollowStatus = 'pending' | 'accepted';
 
 export type Profile = {

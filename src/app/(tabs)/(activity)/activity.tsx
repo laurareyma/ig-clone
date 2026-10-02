@@ -4,7 +4,7 @@ export default function ActivityScreen() {
   return (
     <PlaceholderScreen
       title="Actividad"
-      links={[{ href: '/(activity)/post/demo', label: 'Abrir un post en esta pestaña' }]}
+      links={[{ href: '/(tabs)/(activity)/post/demo', label: 'Abrir un post en esta pestaña' }]}
     />
   );
 }

@@ -1,5 +1,1 @@
-import { PlaceholderScreen } from '@/presentation/components/placeholder-screen';
-
-export default function SignInScreen() {
-  return <PlaceholderScreen title="Iniciar sesión" closable />;
-}
+export { SignInScreen as default } from '@/presentation/screens/sign-in-screen';

@@ -16,7 +16,7 @@ Si falta alguna variable de `.env.local`, la app falla al arrancar indicando cu�
 
 ```bash
 npm run lint        # ESLint
-npm run typecheck   # TypeScript
+npm run typecheck   # regenera los tipos de rutas y corre TypeScript
 npm test            # pruebas unitarias (Jest); van junto al código como *.test.ts, fuera de src/app
 npm run test:rls    # reglas de privacidad
 npm run check       # las cuatro anteriores, lo mismo que corre el CI
@@ -33,30 +33,62 @@ supabase login
 supabase link --project-ref <ref-del-proyecto>
 supabase db push          # aplica las migraciones al proyecto remoto
 npm run test:rls          # prueba las reglas en un Postgres embebido, sin Docker
+npm run gen:types         # regenera src/data/remote/database.types.ts desde el esquema
 ```
+
+Tras cada migración nueva: `supabase db push` y `npm run gen:types`.
 
 ## Estructura
 
 ```
 src/
-  app/            Rutas (Expo Router). Solo pantallas y layouts, sin lógica.
-  presentation/   Componentes, hooks y tema de la UI.
-  domain/         Entidades y contratos de repositorios. No importa nada de las otras capas.
+  app/            Rutas (Expo Router). Solo layouts y re-exportaciones de pantallas.
+  presentation/   Pantallas, componentes, hooks, sesión y tema.
+  domain/         Entidades, contratos de repositorios, casos de uso y errores.
+                  No importa React, Supabase ni ninguna otra capa.
   data/
-    remote/       Cliente de Supabase y validación de variables de entorno.
+    local/        SQLite: apertura, migraciones versionadas y aviso de cambios.
+    remote/       Cliente de Supabase, tipos generados y fuentes remotas.
+    mappers/      Conversión fila (snake_case) ↔ entidad (camelCase).
+    repositories/ Implementaciones de los contratos de domain/.
+  di/             Raíz de composición: crea las implementaciones y las entrega a la UI.
+  testing/        Utilidades de prueba (SQLite en memoria, repositorios falsos).
 supabase/
   migrations/     Esquema SQL + RLS.
   tests/          Pruebas de las reglas de privacidad.
 ```
 
-Las dependencias van hacia adentro: `app → presentation → domain ← data`.
+Las dependencias van hacia adentro: `app → presentation → domain ← data`. ESLint lo
+hace cumplir (`eslint.config.js`): importar `data/` o Supabase desde la UI, o cualquier
+cosa externa desde `domain/`, es un error de lint.
+
+### Flujo de datos
+
+SQLite es la única fuente de verdad de la UI:
+
+1. La pantalla se suscribe con `repositorio.watch(...)` y recibe de inmediato lo que
+   haya en el dispositivo, sin esperar a la red.
+2. `repositorio.refresh(...)` trae los datos de Supabase y los escribe en SQLite.
+3. `ChangeNotifier` avisa de que la tabla cambió y la suscripción vuelve a leer.
+
+Sin conexión, el paso 2 falla y la pantalla se queda con lo guardado. El perfil propio
+(`use-profile.ts`) es el primer ejemplo; los demás módulos siguen el mismo patrón.
+
+El esquema local cambia solo añadiendo migraciones al final de
+`src/data/local/migrations.ts`; la versión aplicada se guarda en `PRAGMA user_version`.
+
+### Sesión
+
+- `SessionProvider` expone la sesión que emite `AuthRepository.onSessionChange`.
+- El layout raíz mantiene la pantalla de carga hasta conocerla y protege las rutas con
+  `Stack.Protected`: sin sesión solo existe `(auth)`; con sesión, todo lo demás. Entrar y
+  salir no navega a mano: cambia la sesión y el layout muestra lo que corresponde.
+- Al quedarse sin sesión se vacían las tablas locales (`src/di/container.ts`).
 
 Carpetas que se añaden al construir cada módulo:
 
-- `data/local/` — base SQLite (fuente única de verdad de la UI).
 - `data/sync/` — cola de sincronización offline.
 - `data/image-cache/` — caché de imágenes de dos niveles (RAM + disco, LRU).
-- `data/repositories/` — implementaciones de los contratos de `domain/`.
 
 ## Navegación
 
@@ -75,12 +107,17 @@ src/app/
 - Cada pestaña conserva su propia pila, porque el Stack del grupo compartido se
   instancia una vez por pestaña.
 - `post/[id].tsx` se puede abrir dentro de cualquier pestaña con
-  `/(explore)/post/{id}`, etc.
+  `/(tabs)/(explore)/post/{id}`, etc.
 - Los modales viven fuera de `(tabs)` para poder tapar la barra de pestañas.
 
 ### Deep link
 
 `instagramclone://post/{uuid}` abre la publicación en la pestaña Inicio.
+
+`post/[id]` existe en las cuatro pestañas, así que el enlace es ambiguo.
+`src/app/+native-intent.tsx` lo reescribe a `/(tabs)/(home)/post/{uuid}` antes de que el
+enrutador lo resuelva (lógica y pruebas en `presentation/navigation/incoming-link.ts`).
+Sin sesión abierta, el enlace lleva al inicio de sesión y no se retoma después.
 
 El esquema `instagramclone://` solo existe en un development build
 (`npx expo run:android` o `npx expo run:ios`). En Expo Go se prueba con:

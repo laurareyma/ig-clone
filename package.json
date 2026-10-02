@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
@@ -41,7 +42,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "expo customize tsconfig.json && tsc --noEmit",
+    "gen:types": "supabase gen types typescript --linked --schema public > src/data/remote/database.types.ts",
     "test": "jest",
     "test:rls": "node supabase/tests/rls.test.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run test:rls"

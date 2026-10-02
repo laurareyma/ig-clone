@@ -142,6 +142,9 @@ check('dejar de seguir', r.affected === 1, r);
 
 await db.exec(`select set_config('request.jwt.claim.sub', '', false); set role anon;`);
 try { await db.query('select * from profiles'); check('anon sin acceso', false); } catch (e) { check('anon sin acceso', /permission denied/.test(e.message), e.message); }
+r = await db.query(`select is_username_available('ana') as taken, is_username_available('ANA') as upper, is_username_available('libre') as free`);
+check('anon consulta si un usuario está libre', r.rows[0].taken === false && r.rows[0].upper === false && r.rows[0].free === true, r.rows);
+try { await db.query(`select get_profile_stats('${A}')`); check('anon no ejecuta otras funciones', false); } catch (e) { check('anon no ejecuta otras funciones', /permission denied/.test(e.message), e.message); }
 await db.exec('reset role');
 
 console.log(fails ? `\n${fails} fallos` : '\ntodo ok');

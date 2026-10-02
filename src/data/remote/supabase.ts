@@ -3,6 +3,7 @@ import 'expo-sqlite/localStorage/install';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
+import type { Database } from '@/data/remote/database.types';
 import { parseEnv } from '@/data/remote/env';
 
 // Expo solo sustituye EXPO_PUBLIC_* cuando se lee con process.env.NOMBRE literal:
@@ -12,7 +13,7 @@ const env = parseEnv({
   supabasePublishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 });
 
-export const supabase = createClient(env.supabaseUrl, env.supabasePublishableKey, {
+export const supabase = createClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
     storage: localStorage,
     autoRefreshToken: true,
