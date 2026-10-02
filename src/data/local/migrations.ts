@@ -113,6 +113,25 @@ export const migrations: Migration[] = [
       CREATE INDEX messages_conversation ON messages (conversation_id, created_at);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE stories (
+        id TEXT PRIMARY KEY NOT NULL,
+        author_id TEXT NOT NULL,
+        image_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+
+      -- Qué historias abrió ya el usuario en este dispositivo. Vive aparte de stories
+      -- para sobrevivir a cada refresco, que reemplaza esa tabla entera.
+      CREATE TABLE story_views (
+        story_id TEXT PRIMARY KEY NOT NULL,
+        viewed_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
 
 // Tablas con datos del usuario; se vacían al cerrar sesión. image_cache no está aquí
@@ -125,6 +144,8 @@ export const userTables = [
   'comments',
   'conversations',
   'messages',
+  'stories',
+  'story_views',
   // Las acciones pendientes son de quien las hizo: no deben enviarse con otra sesión.
   'outbox',
 ] as const;

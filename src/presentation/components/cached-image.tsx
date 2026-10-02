@@ -8,15 +8,18 @@ import { useTheme } from '@/presentation/hooks/use-theme';
 type Props = {
   image: ImageRef;
   // ancho / alto de la imagen original. El hueco se reserva antes de que cargue, así
-  // la lista no salta ni recalcula alturas cuando llega la imagen.
-  aspectRatio: number;
+  // la lista no salta ni recalcula alturas cuando llega la imagen. Se omite cuando el
+  // tamaño lo fija `style` (por ejemplo, a pantalla completa).
+  aspectRatio?: number;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  // Se llama cuando la imagen ya está disponible para pintarse.
+  onReady?: () => void;
 };
 
 // Imagen servida por la caché de dos niveles. No usa la carga por URL de <Image>: solo
 // se le entregan archivos locales que ya controla la caché.
-export function CachedImage({ image, aspectRatio, style, accessibilityLabel }: Props) {
+export function CachedImage({ image, aspectRatio, style, accessibilityLabel, onReady }: Props) {
   const { images } = useDependencies();
   const theme = useTheme();
   const key = imageKey(image);
@@ -47,6 +50,10 @@ export function CachedImage({ image, aspectRatio, style, accessibilityLabel }: P
       cancel();
     };
   }, [images, key, bucket, path]);
+
+  useEffect(() => {
+    if (uri) onReady?.();
+  }, [uri, onReady]);
 
   return (
     <View

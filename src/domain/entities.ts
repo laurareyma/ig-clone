@@ -53,10 +53,22 @@ export type Comment = {
 
 export type Story = {
   id: string;
-  authorId: string;
+  author: Profile;
+  // Ruta en el bucket media.
   imagePath: string;
   createdAt: string;
+  // 24 horas después de publicarse; lo fija el servidor.
   expiresAt: string;
+  // El usuario actual ya la abrió en este dispositivo.
+  seen: boolean;
+};
+
+// Las historias activas de un autor: un círculo en la fila de historias.
+export type StoryGroup = {
+  author: Profile;
+  // De la más antigua a la más nueva: el orden en que se reproducen.
+  stories: Story[];
+  allSeen: boolean;
 };
 
 export type Message = {

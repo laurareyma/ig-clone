@@ -11,10 +11,12 @@ import { SupabaseCommentSource } from '@/data/remote/comment-source';
 import { SupabaseMessageSource } from '@/data/remote/message-source';
 import { SupabasePostSource } from '@/data/remote/post-source';
 import { SupabaseProfileSource } from '@/data/remote/profile-source';
+import { SupabaseStorySource } from '@/data/remote/story-source';
 import { env, supabase } from '@/data/remote/supabase';
 import { OfflineFirstCommentRepository } from '@/data/repositories/offline-first-comment-repository';
 import { OfflineFirstMessageRepository } from '@/data/repositories/offline-first-message-repository';
 import { OfflineFirstPostRepository } from '@/data/repositories/offline-first-post-repository';
+import { OfflineFirstStoryRepository } from '@/data/repositories/offline-first-story-repository';
 import { OfflineFirstProfileRepository } from '@/data/repositories/offline-first-profile-repository';
 import { SupabaseAuthRepository } from '@/data/repositories/supabase-auth-repository';
 import { NetInfoConnectivity } from '@/data/sync/net-info-connectivity';
@@ -28,10 +30,11 @@ const outbox = new Outbox(getDatabase, changes, new NetInfoConnectivity());
 const auth = new SupabaseAuthRepository(supabase);
 const profileSource = new SupabaseProfileSource(supabase);
 const profiles = new OfflineFirstProfileRepository(getDatabase, profileSource, changes);
+const uploader = new ExpoPostImageUploader(supabase);
 const posts = new OfflineFirstPostRepository(
   getDatabase,
   new SupabasePostSource(supabase),
-  new ExpoPostImageUploader(supabase),
+  uploader,
   changes,
   outbox,
   randomUUID,
@@ -49,6 +52,13 @@ const messages = new OfflineFirstMessageRepository(
   new SupabaseMessageSource(supabase),
   changes,
   outbox,
+  randomUUID,
+);
+const stories = new OfflineFirstStoryRepository(
+  getDatabase,
+  new SupabaseStorySource(supabase),
+  uploader,
+  changes,
   randomUUID,
 );
 
@@ -82,6 +92,7 @@ export const container: Dependencies = {
   posts,
   comments,
   messages,
+  stories,
   images,
   sync: outbox,
 };

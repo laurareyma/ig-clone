@@ -5,16 +5,21 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { EmptyState } from '@/presentation/components/empty-state';
 import { Icon } from '@/presentation/components/icon';
 import { PostCard } from '@/presentation/components/post-card';
+import { StoryTray } from '@/presentation/components/story-tray';
 import { SyncBanner } from '@/presentation/components/sync-banner';
 import { UnreadBadge } from '@/presentation/components/unread-badge';
 import { ThemedView } from '@/presentation/components/themed-view';
 import { useFeed } from '@/presentation/hooks/use-feed';
 import { useInbox } from '@/presentation/hooks/use-messages';
+import { useStoryGroups } from '@/presentation/hooks/use-stories';
+import { useCurrentUserId } from '@/presentation/session/session-provider';
 import { Spacing } from '@/presentation/theme';
 
 export function FeedScreen() {
   const { posts, refreshing, loadingMore, refresh, loadMore } = useFeed('home');
   const unread = useInbox().unreadTotal;
+  const stories = useStoryGroups();
+  const me = useCurrentUserId();
 
   return (
     <ThemedView style={styles.fill}>
@@ -54,8 +59,12 @@ export function FeedScreen() {
           data={posts}
           keyExtractor={(post) => post.id}
           renderItem={({ item }) => <PostCard post={item} />}
+          ListHeaderComponent={<StoryTray groups={stories.groups ?? []} currentUserId={me} />}
           refreshing={refreshing}
-          onRefresh={refresh}
+          onRefresh={() => {
+            void refresh();
+            void stories.refresh();
+          }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={

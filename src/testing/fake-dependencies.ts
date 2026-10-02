@@ -6,6 +6,7 @@ import type {
   Profile,
   ProfileDetails,
   Session,
+  StoryGroup,
 } from '@/domain/entities';
 import type { AuthRepository } from '@/domain/repositories/auth-repository';
 import type { CommentRepository } from '@/domain/repositories/comment-repository';
@@ -13,6 +14,7 @@ import type { ImageCache } from '@/domain/repositories/image-cache';
 import type { MessageRepository } from '@/domain/repositories/message-repository';
 import { feedKey, type PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
+import type { StoryRepository } from '@/domain/repositories/story-repository';
 import type { SyncMonitor, SyncStatus } from '@/domain/repositories/sync-monitor';
 
 export const testSession: Session = { userId: 'user-1', email: 'ana@example.com' };
@@ -74,6 +76,7 @@ export function createFakeDependencies() {
     messages: observable<Message[]>([]),
     // La prueba lo llama para simular que el otro escribe.
     receiveTyping: (_typing: boolean) => {},
+    storyGroups: observable<StoryGroup[]>([]),
     syncStatus: observable<SyncStatus>({ online: true, pendingCount: 0 }),
     followRequests: [] as Profile[],
     searchResults: [] as Profile[],
@@ -154,6 +157,13 @@ export function createFakeDependencies() {
     },
   };
 
+  const stories: StoryRepository = {
+    watchGroups: (listener) => data.storyGroups.watch(listener),
+    refresh: async () => {},
+    markSeen: async () => {},
+    create: async () => {},
+  };
+
   const images: ImageCache = {
     peek: () => null,
     load: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
@@ -175,6 +185,7 @@ export function createFakeDependencies() {
     posts,
     comments,
     messages,
+    stories,
     images,
     sync,
     data,

@@ -6,6 +6,7 @@ import type { ImageCache } from '@/domain/repositories/image-cache';
 import type { MessageRepository } from '@/domain/repositories/message-repository';
 import type { PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
+import type { StoryRepository } from '@/domain/repositories/story-repository';
 import type { SyncMonitor } from '@/domain/repositories/sync-monitor';
 
 // La UI solo conoce los contratos del dominio. Las implementaciones concretas las
@@ -16,6 +17,7 @@ export type Dependencies = {
   posts: PostRepository;
   comments: CommentRepository;
   messages: MessageRepository;
+  stories: StoryRepository;
   images: ImageCache;
   sync: SyncMonitor;
 };

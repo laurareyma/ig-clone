@@ -11,6 +11,8 @@ const symbols = {
   plus: { ios: 'plus.app', android: 'add_box' },
   messages: { ios: 'bubble.left.and.bubble.right', android: 'forum' },
   lock: { ios: 'lock', android: 'lock' },
+  close: { ios: 'xmark', android: 'close' },
+  add: { ios: 'plus', android: 'add' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof symbols;

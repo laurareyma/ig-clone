@@ -1,10 +1,15 @@
 import { resolveIncomingLink } from '@/presentation/navigation/incoming-link';
+import { rememberIncomingLink } from '@/presentation/navigation/pending-link';
 
-// Expo Router llama a esta función con cada enlace que abre la app desde fuera,
-// antes de resolver la ruta. Se ejecuta fuera de React: no debe lanzar errores.
+// Expo Router llama a esta función con cada enlace que abre la app desde fuera (con la
+// app cerrada o ya abierta), antes de resolver la ruta. Se ejecuta fuera de React: no
+// debe lanzar errores.
 export function redirectSystemPath({ path }: { path: string; initial: boolean }) {
   try {
-    return resolveIncomingLink(path);
+    const resolved = resolveIncomingLink(path);
+    // Por si no hay sesión: se retoma después del login.
+    rememberIncomingLink(resolved);
+    return resolved;
   } catch {
     return path;
   }

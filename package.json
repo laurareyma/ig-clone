@@ -58,7 +58,8 @@
     "preset": "jest-expo",
     "roots": [
       "<rootDir>/src"
-    ]
+    ],
+    "resolver": "react-native-worklets/jest/resolver"
   },
   "private": true
 }

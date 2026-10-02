@@ -2,7 +2,8 @@ import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import type { Client } from '@/data/remote/current-user';
-import type { LocalImage, PostImageUploader } from '@/data/remote/post-image-uploader';
+import type { PostImageUploader } from '@/data/remote/post-image-uploader';
+import type { LocalImage } from '@/domain/repositories/post-repository';
 
 // Una foto de cámara ronda los 4000 px y varios MB. Ninguna pantalla de teléfono muestra
 // el feed a más de 1080 px de ancho, así que subir más solo gasta datos, almacenamiento

@@ -397,6 +397,21 @@ export type Database = {
           posts: number
         }[]
       }
+      get_stories: {
+        Args: never
+        Returns: {
+          author_avatar_url: string
+          author_bio: string
+          author_full_name: string
+          author_id: string
+          author_is_private: boolean
+          author_username: string
+          created_at: string
+          expires_at: string
+          id: string
+          image_path: string
+        }[]
+      }
       is_conversation_participant: {
         Args: { conversation: string }
         Returns: boolean

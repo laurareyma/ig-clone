@@ -233,6 +233,34 @@ Qué pasa cuando un envío falla (`classify-error.ts`):
 Para que el canal privado sea obligatorio hay que desactivar "Allow public access" en
 los ajustes de Realtime del proyecto de Supabase.
 
+### Historias
+
+- **Fila de historias** sobre el feed: un círculo por autor, con anillo de color si queda
+  algo sin ver. `get_stories` devuelve las historias activas de quienes sigues y las
+  tuyas; la RLS sigue aplicando la privacidad de cada cuenta.
+- **24 horas.** `expires_at` lo fija el servidor al insertar (el cliente no tiene permiso
+  sobre esa columna). La caducidad se comprueba en tres sitios: la RLS, `get_stories` y,
+  al leer la copia local, `groupStories`, para que una historia guardada no se vea
+  pasado su plazo aunque no haya conexión para refrescar.
+- **"Visto" es local.** Se guarda en la tabla `story_views` de SQLite y no se envía al
+  servidor. Está separada de `stories` para sobrevivir a cada refresco, que reemplaza
+  esa tabla.
+- **Visor** (`story-viewer-screen.tsx`), modal a pantalla completa:
+  - La barra de progreso es un valor compartido de Reanimated que va de 0 a 1 en 5 s. Se
+    anima `scaleX`, no el ancho: una transformación no recalcula el layout, así que cada
+    fotograma lo pinta el hilo de UI sin pasar por JavaScript.
+  - Al llegar a 1, el hilo de UI avisa al de JavaScript (`scheduleOnRN`) para pasar a la
+    siguiente historia, que es un cambio de estado de React.
+  - Mantener pulsado pausa: un gesto `LongPress` de Gesture Handler cancela la animación
+    en el propio hilo de UI y al soltar la reanuda con el tiempo que faltaba. Un toque
+    corto pasa a la siguiente (o a la anterior, en el tercio izquierdo).
+  - La barra no arranca hasta que la imagen está lista, y la imagen de la siguiente
+    historia se descarga por adelantado.
+  - La lista de grupos se fija al abrir: marcar historias como vistas reordena la fila, y
+    seguir esa lista viva cambiaría las posiciones a mitad de reproducción.
+- La lógica de orden, caducidad y navegación entre historias es pura y está en
+  `domain/story-groups.ts`.
+
 ## Navegación
 
 ```
@@ -263,7 +291,19 @@ src/app/
 `post/[id]` existe en las cuatro pestañas, así que el enlace es ambiguo.
 `src/app/+native-intent.tsx` lo reescribe a `/(tabs)/(home)/post/{uuid}` antes de que el
 enrutador lo resuelva (lógica y pruebas en `presentation/navigation/incoming-link.ts`).
-Sin sesión abierta, el enlace lleva al inicio de sesión y no se retoma después.
+Qué pasa según el estado de la app:
+
+| Estado | Resultado |
+|---|---|
+| Cerrada, con sesión guardada | El layout raíz no monta el navegador hasta leer la sesión, así que el enlace se resuelve ya con la guardia abierta y abre la publicación. |
+| En segundo plano o abierta | `+native-intent` lo reescribe y el enrutador empuja la publicación en la pestaña Inicio. |
+| Sin sesión | La guardia lleva al inicio de sesión. El enlace queda guardado (`presentation/navigation/pending-link.ts`) y se abre al entrar. |
+
+Para probarlo en un development build:
+
+```bash
+npx uri-scheme open "instagramclone://post/<uuid>" --ios      # o --android
+```
 
 El esquema `instagramclone://` solo existe en un development build
 (`npx expo run:android` o `npx expo run:ios`). En Expo Go se prueba con:

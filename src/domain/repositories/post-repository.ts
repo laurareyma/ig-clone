@@ -13,6 +13,9 @@ export type FeedPage = {
   hasMore: boolean;
 };
 
+// Imagen elegida por el usuario, todavía en el dispositivo.
+export type LocalImage = { uri: string; width: number; height: number };
+
 export type NewPost = {
   // Archivo local elegido por el usuario.
   imageUri: string;
