@@ -8,7 +8,7 @@ import { parseEnv } from '@/data/remote/env';
 
 // Expo solo sustituye EXPO_PUBLIC_* cuando se lee con process.env.NOMBRE literal:
 // ni process.env[nombre] ni desestructurar funcionan.
-const env = parseEnv({
+export const env = parseEnv({
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
   supabasePublishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 });

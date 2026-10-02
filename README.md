@@ -48,6 +48,7 @@ src/
                   No importa React, Supabase ni ninguna otra capa.
   data/
     local/        SQLite: apertura, migraciones versionadas y aviso de cambios.
+    image-cache/  Caché de imágenes de dos niveles (memoria + disco) con LRU.
     remote/       Cliente de Supabase, tipos generados y fuentes remotas.
     mappers/      Conversión fila (snake_case) ↔ entidad (camelCase).
     repositories/ Implementaciones de los contratos de domain/.
@@ -85,10 +86,37 @@ El esquema local cambia solo añadiendo migraciones al final de
   salir no navega a mano: cambia la sesión y el layout muestra lo que corresponde.
 - Al quedarse sin sesión se vacían las tablas locales (`src/di/container.ts`).
 
+### Caché de imágenes
+
+Motor propio en `data/image-cache/`; la UI lo usa a través de `<CachedImage>`. No se usa
+`expo-image` ni la carga por URL de `<Image>`: al componente nativo solo se le entregan
+archivos locales que la caché controla.
+
+| Nivel | Qué guarda | Límite | Desalojo |
+|---|---|---|---|
+| 1. Memoria (`LruMap`) | clave → URI del archivo local | 300 entradas | LRU |
+| 2. Disco (`DiskIndex` + archivos) | el archivo, más tamaño y último uso en SQLite | 200 MB | LRU |
+
+- **Clave:** `bucket/ruta` en Storage. La URL de descarga de un bucket privado cambia,
+  la ruta no.
+- **Flujo de `load()`:** memoria → índice de disco → red. Lo descargado se guarda en
+  ambos niveles y después se comprueba el límite de disco.
+- **Descargas compartidas:** dos celdas que piden la misma imagen esperan una sola
+  descarga (`inFlight`).
+- **Cancelación:** cada `load()` devuelve `cancel()`. `<CachedImage>` lo llama al
+  desmontarse o reciclarse; cuando nadie más espera la imagen se aborta la descarga con
+  un `AbortSignal`, sin dejar archivo ni fila en el índice.
+- **Usos en memoria:** un acierto en el nivel 1 no toca el disco, así que se anotan en
+  `pendingTouches` y se escriben juntos antes de cada desalojo. Sin eso, el LRU de disco
+  borraría justo las imágenes más vistas.
+- **Hilos:** la descarga y la escritura del archivo ocurren en hilos nativos
+  (`expo-file-system`); el hilo de JS solo coordina promesas. El nivel de memoria guarda
+  rutas, no bitmaps: la decodificación y su memoria las gestiona el `<Image>` nativo.
+- **Privacidad:** al cerrar sesión se vacían los dos niveles.
+
 Carpetas que se añaden al construir cada módulo:
 
 - `data/sync/` — cola de sincronización offline.
-- `data/image-cache/` — caché de imágenes de dos niveles (RAM + disco, LRU).
 
 ## Navegación
 

@@ -1,6 +1,7 @@
 import { createContext, use, type PropsWithChildren } from 'react';
 
 import type { AuthRepository } from '@/domain/repositories/auth-repository';
+import type { ImageCache } from '@/domain/repositories/image-cache';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
 
 // La UI solo conoce los contratos del dominio. Las implementaciones concretas las
@@ -8,6 +9,7 @@ import type { ProfileRepository } from '@/domain/repositories/profile-repository
 export type Dependencies = {
   auth: AuthRepository;
   profiles: ProfileRepository;
+  images: ImageCache;
 };
 
 const DependenciesContext = createContext<Dependencies | null>(null);

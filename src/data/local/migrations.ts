@@ -18,9 +18,23 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    // Índice del nivel de disco de la caché de imágenes (ver data/image-cache).
+    sql: `
+      CREATE TABLE image_cache (
+        key TEXT PRIMARY KEY NOT NULL,
+        file_name TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        last_accessed INTEGER NOT NULL
+      );
+      CREATE INDEX image_cache_lru ON image_cache (last_accessed);
+    `,
+  },
 ];
 
-// Tablas con datos del usuario; se vacían al cerrar sesión.
+// Tablas con datos del usuario; se vacían al cerrar sesión. image_cache no está aquí
+// porque vaciarla exige borrar también sus archivos: lo hace ImageCache.clear().
 export const userTables = ['profiles'] as const;
 
 // La versión aplicada se guarda en PRAGMA user_version, dentro del propio archivo.

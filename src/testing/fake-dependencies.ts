@@ -1,5 +1,6 @@
 import type { Profile, Session } from '@/domain/entities';
 import type { AuthRepository } from '@/domain/repositories/auth-repository';
+import type { ImageCache } from '@/domain/repositories/image-cache';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
 
 export const testSession: Session = { userId: 'user-1', email: 'ana@example.com' };
@@ -47,10 +48,16 @@ export function createFakeDependencies() {
     refresh: async () => {},
   };
 
+  const images: ImageCache = {
+    peek: () => null,
+    load: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
+    clear: async () => {},
+  };
+
   // Vuelve al estado de arranque: todavía no se sabe si hay sesión guardada.
   const resetSession = () => {
     session = undefined;
   };
 
-  return { auth, profiles, setSession, resetSession };
+  return { auth, profiles, images, setSession, resetSession };
 }
