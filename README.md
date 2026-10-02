@@ -50,6 +50,7 @@ src/
     local/        SQLite: apertura, migraciones versionadas y aviso de cambios.
     image-cache/  Caché de imágenes de dos niveles (memoria + disco) con LRU.
     remote/       Cliente de Supabase, tipos generados y fuentes remotas.
+    media/        Reducción, compresión y subida de imágenes.
     mappers/      Conversión fila (snake_case) ↔ entidad (camelCase).
     repositories/ Implementaciones de los contratos de domain/.
   di/             Raíz de composición: crea las implementaciones y las entrega a la UI.
@@ -114,6 +115,52 @@ archivos locales que la caché controla.
   rutas, no bitmaps: la decodificación y su memoria las gestiona el `<Image>` nativo.
 - **Privacidad:** al cerrar sesión se vacían los dos niveles.
 
+### Feed y publicaciones
+
+- **Una sola consulta para todas las listas.** La función SQL `get_posts` sirve Inicio
+  (`only_following`), Explorar, la cuadrícula de un perfil (`by_author`) y una publicación
+  suelta (`by_id`). Devuelve el autor y `liked_by_me` en la misma fila, así no hay una
+  consulta extra por publicación. Es `security invoker`: la visibilidad la decide la RLS.
+- **Paginación por cursor.** Se pide "lo anterior a `(created_at, id)` de la última
+  publicación guardada". Con `OFFSET`, una publicación nueva desplazaría las páginas y se
+  repetirían filas; con cursor no. El `id` desempata fechas iguales.
+- **En local** (`data/local/post-store.ts`): `posts` guarda cada publicación una vez y
+  `feed_entries` dice a qué listas pertenece. Refrescar reemplaza la lista en una
+  transacción; cargar más añade.
+- **Like y comentario** se escriben primero en SQLite (la UI los muestra al instante) y
+  después en el servidor; si el servidor falla, se deshacen. Los comentarios llevan un id
+  generado en el cliente, así un reintento no los duplica.
+- **Comentarios en tiempo real:** `useComments` abre un canal de Supabase Realtime
+  mientras la pantalla está abierta; cada evento se escribe en SQLite y la lista se
+  actualiza sola. El eco de un comentario propio se ignora porque el id ya existe.
+- **Hilos:** `domain/comment-threads.ts` agrupa los comentarios en hilos de un nivel.
+- **Crear publicación:** la imagen se reduce a 1080 px de ancho y se comprime en un
+  módulo nativo antes de subirla a `media/{user_id}/`. Si falla guardar la fila, se borra
+  la imagen subida.
+- **Rendimiento:** las listas usan FlashList, que recicla las celdas. `use-feed.ts`
+  conserva el mismo objeto de cada publicación que no cambió, así un like vuelve a
+  renderizar solo esa tarjeta.
+
+### Privacidad
+
+Toda la privacidad se decide en el servidor (RLS en `supabase/migrations/`); la app solo
+elige qué mensaje mostrar.
+
+1. Seguir una cuenta privada crea un `follow` con estado `pending`; el estado lo fija un
+   trigger y el cliente no tiene permiso para enviarlo.
+2. El dueño ve la solicitud en la pestaña Actividad: aceptar la pasa a `accepted`;
+   rechazar borra la fila.
+3. Hasta que se acepta, `get_posts`, las listas de seguidores y la descarga de imágenes
+   devuelven vacío o error para ese usuario, aunque conozca los ids.
+
+### Escrituras en SQLite
+
+Todas las escrituras y transacciones pasan por una cola (`serializeWrites` en
+`data/local/sql-database.ts`) y se ejecutan de una en una; las lecturas no esperan. En
+`expo-sqlite` todas las llamadas comparten una conexión, y sin la cola una escritura
+lanzada mientras otra parte de la app tiene una transacción abierta quedaría dentro de
+ella.
+
 Carpetas que se añaden al construir cada módulo:
 
 - `data/sync/` — cola de sincronización offline.
@@ -127,15 +174,17 @@ src/app/
   (tabs)/              Las cuatro pestañas.
     (home,explore,activity,profile)/
       _layout.tsx      Stack que se instancia una vez por pestaña.
-      post/[id].tsx    Pantalla compartida por las cuatro pilas.
+      post/[id].tsx    Publicación con sus comentarios.
+      user/[id].tsx    Perfil de otro usuario.
+      follows/[userId].tsx  Seguidores o seguidos.
   create-post.tsx      Modal.
   story/[userId].tsx   Modal a pantalla completa.
 ```
 
 - Cada pestaña conserva su propia pila, porque el Stack del grupo compartido se
   instancia una vez por pestaña.
-- `post/[id].tsx` se puede abrir dentro de cualquier pestaña con
-  `/(tabs)/(explore)/post/{id}`, etc.
+- Las pantallas del grupo compartido se abren dentro de la pestaña en la que estás:
+  navegar a `/post/{id}` o `/user/{id}` empuja la pantalla en la pila actual.
 - Los modales viven fuera de `(tabs)` para poder tapar la barra de pestañas.
 
 ### Deep link

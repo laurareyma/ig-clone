@@ -1,10 +1,17 @@
+import { randomUUID } from 'expo-crypto';
+
 import { ExpoImageFiles } from '@/data/image-cache/expo-image-files';
 import { TwoLevelImageCache } from '@/data/image-cache/two-level-image-cache';
 import { ChangeNotifier } from '@/data/local/change-notifier';
 import { clearUserData } from '@/data/local/clear-user-data';
 import { getDatabase } from '@/data/local/database';
-import { SupabaseProfileSource } from '@/data/remote/profile-remote-source';
+import { ExpoPostImageUploader } from '@/data/media/expo-post-image-uploader';
+import { SupabaseCommentSource } from '@/data/remote/comment-source';
+import { SupabasePostSource } from '@/data/remote/post-source';
+import { SupabaseProfileSource } from '@/data/remote/profile-source';
 import { env, supabase } from '@/data/remote/supabase';
+import { OfflineFirstCommentRepository } from '@/data/repositories/offline-first-comment-repository';
+import { OfflineFirstPostRepository } from '@/data/repositories/offline-first-post-repository';
 import { OfflineFirstProfileRepository } from '@/data/repositories/offline-first-profile-repository';
 import { SupabaseAuthRepository } from '@/data/repositories/supabase-auth-repository';
 import type { Dependencies } from '@/presentation/dependencies';
@@ -13,10 +20,21 @@ import type { Dependencies } from '@/presentation/dependencies';
 // data/ y los contratos que consume presentation/.
 const changes = new ChangeNotifier();
 const auth = new SupabaseAuthRepository(supabase);
-const profiles = new OfflineFirstProfileRepository(
+const profileSource = new SupabaseProfileSource(supabase);
+const profiles = new OfflineFirstProfileRepository(getDatabase, profileSource, changes);
+const posts = new OfflineFirstPostRepository(
   getDatabase,
-  new SupabaseProfileSource(supabase),
+  new SupabasePostSource(supabase),
+  new ExpoPostImageUploader(supabase),
   changes,
+  randomUUID,
+);
+const comments = new OfflineFirstCommentRepository(
+  getDatabase,
+  new SupabaseCommentSource(supabase),
+  profileSource,
+  changes,
+  randomUUID,
 );
 
 const images = new TwoLevelImageCache(
@@ -36,4 +54,4 @@ auth.onSessionChange((session) => {
   void images.clear();
 });
 
-export const container: Dependencies = { auth, profiles, images };
+export const container: Dependencies = { auth, profiles, posts, comments, images };

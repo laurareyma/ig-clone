@@ -1,10 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 
-import { PlaceholderScreen } from '@/presentation/components/placeholder-screen';
+import { PostScreen } from '@/presentation/screens/post-screen';
 
 // Destino del deep link instagramclone://post/{uuid}
-export default function PostScreen() {
+export default function PostRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  return <PlaceholderScreen title="Publicación" detail={id} />;
+  return <PostScreen postId={id} />;
 }

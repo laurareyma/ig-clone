@@ -4,7 +4,7 @@ declare module 'node:sqlite' {
   type Value = string | number | null;
 
   class StatementSync {
-    run(...params: Value[]): unknown;
+    run(...params: Value[]): { changes: number | bigint };
     get(...params: Value[]): unknown;
     all(...params: Value[]): unknown[];
   }

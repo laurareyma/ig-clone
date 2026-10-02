@@ -1,7 +1,7 @@
 import { openDatabaseAsync } from 'expo-sqlite';
 
 import { migrate } from '@/data/local/migrations';
-import type { SqlDatabase } from '@/data/local/sql-database';
+import { serializeWrites, type SqlDatabase } from '@/data/local/sql-database';
 
 let database: Promise<SqlDatabase> | undefined;
 
@@ -9,9 +9,10 @@ let database: Promise<SqlDatabase> | undefined;
 // promesa, así que nadie consulta un esquema a medio migrar.
 export function getDatabase(): Promise<SqlDatabase> {
   database ??= (async () => {
-    const db = await openDatabaseAsync('app.db');
+    const raw = await openDatabaseAsync('app.db');
     // WAL permite leer mientras se escribe; no se puede activar dentro de una transacción.
-    await db.execAsync('PRAGMA journal_mode = WAL');
+    await raw.execAsync('PRAGMA journal_mode = WAL');
+    const db = serializeWrites(raw);
     await migrate(db);
     return db;
   })();

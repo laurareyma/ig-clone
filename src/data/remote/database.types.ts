@@ -341,6 +341,33 @@ export type Database = {
     Functions: {
       can_view_profile_content: { Args: { target: string }; Returns: boolean }
       get_or_create_dm: { Args: { other: string }; Returns: string }
+      get_posts: {
+        Args: {
+          by_author?: string
+          by_id?: string
+          cursor_created_at?: string
+          cursor_id?: string
+          only_following?: boolean
+          page_size?: number
+        }
+        Returns: {
+          author_avatar_url: string
+          author_bio: string
+          author_full_name: string
+          author_id: string
+          author_is_private: boolean
+          author_username: string
+          caption: string
+          comments_count: number
+          created_at: string
+          id: string
+          image_height: number
+          image_path: string
+          image_width: number
+          liked_by_me: boolean
+          likes_count: number
+        }[]
+      }
       get_profile_stats: {
         Args: { target: string }
         Returns: {

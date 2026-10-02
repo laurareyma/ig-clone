@@ -9,11 +9,19 @@ type Props = {
   onPress: () => void;
   loading?: boolean;
   variant?: 'primary' | 'secondary';
+  // Para botones dentro de una fila (seguir, aceptar, rechazar).
+  compact?: boolean;
 };
 
 const PRIMARY = '#3c87f7';
 
-export function Button({ label, onPress, loading = false, variant = 'primary' }: Props) {
+export function Button({
+  label,
+  onPress,
+  loading = false,
+  variant = 'primary',
+  compact = false,
+}: Props) {
   const theme = useTheme();
   const primary = variant === 'primary';
 
@@ -25,6 +33,7 @@ export function Button({ label, onPress, loading = false, variant = 'primary' }:
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        compact && styles.compact,
         { backgroundColor: primary ? PRIMARY : theme.backgroundElement },
         (pressed || loading) && styles.dimmed,
       ]}>
@@ -46,6 +55,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.three,
+  },
+  compact: {
+    minHeight: 34,
   },
   dimmed: {
     opacity: 0.6,

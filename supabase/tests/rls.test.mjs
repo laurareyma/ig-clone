@@ -80,6 +80,14 @@ r = await run(A, `insert into likes (post_id, user_id) values ('${P}', '${A}') o
 check('like repetido no falla', !r.error, r);
 r = await run(C, `insert into likes (post_id, user_id) values ('${P}', '${C}')`);
 check('C no puede dar like a post que no ve', !!r.error, r);
+r = await run(A, `select id, liked_by_me, author_username from get_posts(only_following => true)`);
+check('feed de A: post de B con autor y liked_by_me', r.rows?.length === 1 && r.rows[0].liked_by_me === true && r.rows[0].author_username === 'beto', r);
+r = await run(B, `select liked_by_me from get_posts(by_author => '${B}')`);
+check('liked_by_me es por usuario', r.rows?.length === 1 && r.rows[0].liked_by_me === false, r);
+r = await run(C, `select * from get_posts()`);
+check('get_posts respeta la RLS: C no ve el post privado', r.rows?.length === 0, r);
+r = await run(C, `select * from get_posts(by_id => '${P}')`);
+check('get_posts por id tampoco lo revela', r.rows?.length === 0, r);
 r = await run(A, `insert into likes (post_id, user_id) values ('${P}', '${B}')`);
 check('A no puede dar like a nombre de B', !!r.error, r);
 const K = '20000000-0000-0000-0000-000000000001', K2 = '20000000-0000-0000-0000-000000000002';
@@ -140,10 +148,24 @@ check('al hacerse pública, pendientes => accepted', r.rows?.[0]?.status === 'ac
 r = await run(C, `delete from follows where follower_id = '${C}' and following_id = '${B}'`);
 check('dejar de seguir', r.affected === 1, r);
 
+for (const n of [1, 2, 3]) await run(A, `insert into posts (id, author_id, image_path, image_width, image_height) values ('30000000-0000-0000-0000-00000000000${n}', '${A}', '${A}/${n}.jpg', 10, 10)`);
+// Dos posts con el mismo created_at: el id desempata y el cursor no debe saltarse ninguno.
+await db.exec(`update posts set created_at = '2026-01-01T00:00:00Z' where id in ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')`);
+const page = async (cursor) => (await run(C, `select id, created_at from get_posts(page_size => 1, by_author => '${A}'${cursor ? `, cursor_created_at => '${cursor.created_at.toISOString()}', cursor_id => '${cursor.id}'` : ''})`)).rows;
+const p1 = await page(), p2 = await page(p1[0]), p3 = await page(p2[0]), p4 = await page(p3[0]);
+check('paginación por cursor: 3 páginas sin repetir ni saltar', [p1, p2, p3].map((p) => p[0]?.id.slice(-1)).join('') === '321' && p4.length === 0, { p1, p2, p3, p4 });
+r = await run(C, `select count(*)::int as n from get_posts(page_size => 1000)`);
+check('page_size tiene tope', r.rows?.[0]?.n <= 50, r);
+r = await run(C, `select count(*)::int as n from get_posts(only_following => true)`);
+check('feed de C: solo de cuentas que sigue', r.rows?.[0]?.n === 3, r);
+r = await run(B, `select count(*)::int as n from get_posts(only_following => true)`);
+check('feed de B: no incluye a quien no sigue', r.rows?.[0]?.n === 1, r);
+
 await db.exec(`select set_config('request.jwt.claim.sub', '', false); set role anon;`);
 try { await db.query('select * from profiles'); check('anon sin acceso', false); } catch (e) { check('anon sin acceso', /permission denied/.test(e.message), e.message); }
 r = await db.query(`select is_username_available('ana') as taken, is_username_available('ANA') as upper, is_username_available('libre') as free`);
 check('anon consulta si un usuario está libre', r.rows[0].taken === false && r.rows[0].upper === false && r.rows[0].free === true, r.rows);
+try { await db.query(`select * from get_posts()`); check('anon no ejecuta get_posts', false); } catch (e) { check('anon no ejecuta get_posts', /permission denied/.test(e.message), e.message); }
 try { await db.query(`select get_profile_stats('${A}')`); check('anon no ejecuta otras funciones', false); } catch (e) { check('anon no ejecuta otras funciones', /permission denied/.test(e.message), e.message); }
 await db.exec('reset role');
 

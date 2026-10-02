@@ -1,17 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import type { SqlDatabase, SqlValue } from '@/data/local/sql-database';
+import { serializeWrites, type SqlDatabase, type SqlValue } from '@/data/local/sql-database';
 
 // SQLite real en memoria para las pruebas, con la misma interfaz que usa la app.
 export function createTestDatabase(): SqlDatabase {
   const db = new DatabaseSync(':memory:');
 
-  return {
+  return serializeWrites({
     async execAsync(sql) {
       db.exec(sql);
     },
     async runAsync(sql, params: SqlValue[]) {
-      return db.prepare(sql).run(...params);
+      return { changes: Number(db.prepare(sql).run(...params).changes) };
     },
     async getFirstAsync<T>(sql: string, params: SqlValue[]) {
       return (db.prepare(sql).get(...params) as T | undefined) ?? null;
@@ -29,5 +29,5 @@ export function createTestDatabase(): SqlDatabase {
         throw error;
       }
     },
-  };
+  });
 }

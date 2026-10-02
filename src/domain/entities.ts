@@ -5,20 +5,31 @@ export type Session = {
   email: string | null;
 };
 
-export type FollowStatus = 'pending' | 'accepted';
-
 export type Profile = {
   id: string;
   username: string;
   fullName: string | null;
+  // Ruta en el bucket avatars.
   avatarUrl: string | null;
   bio: string | null;
   isPrivate: boolean;
 };
 
+// Relación del usuario actual con otro perfil.
+export type FollowStatus = 'self' | 'none' | 'pending' | 'accepted';
+
+export type ProfileDetails = {
+  profile: Profile;
+  postsCount: number;
+  followersCount: number;
+  followingCount: number;
+  followStatus: FollowStatus;
+};
+
 export type Post = {
   id: string;
-  authorId: string;
+  author: Profile;
+  // Ruta en el bucket media.
   imagePath: string;
   imageWidth: number;
   imageHeight: number;
@@ -32,7 +43,7 @@ export type Post = {
 export type Comment = {
   id: string;
   postId: string;
-  authorId: string;
+  author: Profile;
   parentId: string | null;
   body: string;
   createdAt: string;

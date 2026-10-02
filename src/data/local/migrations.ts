@@ -31,11 +31,60 @@ export const migrations: Migration[] = [
       CREATE INDEX image_cache_lru ON image_cache (last_accessed);
     `,
   },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE posts (
+        id TEXT PRIMARY KEY NOT NULL,
+        author_id TEXT NOT NULL,
+        image_path TEXT NOT NULL,
+        image_width INTEGER NOT NULL,
+        image_height INTEGER NOT NULL,
+        caption TEXT NOT NULL,
+        likes_count INTEGER NOT NULL,
+        comments_count INTEGER NOT NULL,
+        liked_by_me INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      -- Qué publicaciones forman cada lista (home, explore, author:{id}). Una misma
+      -- publicación puede estar en varias sin duplicarse en posts.
+      CREATE TABLE feed_entries (
+        feed TEXT NOT NULL,
+        post_id TEXT NOT NULL,
+        PRIMARY KEY (feed, post_id)
+      );
+
+      CREATE TABLE comments (
+        id TEXT PRIMARY KEY NOT NULL,
+        post_id TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        parent_id TEXT,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX comments_post ON comments (post_id, created_at);
+
+      CREATE TABLE profile_details (
+        id TEXT PRIMARY KEY NOT NULL,
+        posts_count INTEGER NOT NULL,
+        followers_count INTEGER NOT NULL,
+        following_count INTEGER NOT NULL,
+        follow_status TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 // Tablas con datos del usuario; se vacían al cerrar sesión. image_cache no está aquí
 // porque vaciarla exige borrar también sus archivos: lo hace ImageCache.clear().
-export const userTables = ['profiles'] as const;
+export const userTables = [
+  'profiles',
+  'profile_details',
+  'posts',
+  'feed_entries',
+  'comments',
+] as const;
 
 // La versión aplicada se guarda en PRAGMA user_version, dentro del propio archivo.
 // Cada migración va en su transacción: si falla, ni el esquema ni la versión cambian.
@@ -46,9 +95,9 @@ export async function migrate(db: SqlDatabase, pending: Migration[] = migrations
   for (const migration of pending) {
     if (migration.version <= current) continue;
 
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(migration.sql);
-      await db.execAsync(`PRAGMA user_version = ${migration.version}`);
+    await db.withTransactionAsync(async (tx) => {
+      await tx.execAsync(migration.sql);
+      await tx.execAsync(`PRAGMA user_version = ${migration.version}`);
     });
   }
 }
