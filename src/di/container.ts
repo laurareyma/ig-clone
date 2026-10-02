@@ -8,10 +8,12 @@ import { clearUserData } from '@/data/local/clear-user-data';
 import { getDatabase } from '@/data/local/database';
 import { ExpoPostImageUploader } from '@/data/media/expo-post-image-uploader';
 import { SupabaseCommentSource } from '@/data/remote/comment-source';
+import { SupabaseMessageSource } from '@/data/remote/message-source';
 import { SupabasePostSource } from '@/data/remote/post-source';
 import { SupabaseProfileSource } from '@/data/remote/profile-source';
 import { env, supabase } from '@/data/remote/supabase';
 import { OfflineFirstCommentRepository } from '@/data/repositories/offline-first-comment-repository';
+import { OfflineFirstMessageRepository } from '@/data/repositories/offline-first-message-repository';
 import { OfflineFirstPostRepository } from '@/data/repositories/offline-first-post-repository';
 import { OfflineFirstProfileRepository } from '@/data/repositories/offline-first-profile-repository';
 import { SupabaseAuthRepository } from '@/data/repositories/supabase-auth-repository';
@@ -42,6 +44,13 @@ const comments = new OfflineFirstCommentRepository(
   outbox,
   randomUUID,
 );
+const messages = new OfflineFirstMessageRepository(
+  getDatabase,
+  new SupabaseMessageSource(supabase),
+  changes,
+  outbox,
+  randomUUID,
+);
 
 const images = new TwoLevelImageCache(
   getDatabase,
@@ -67,4 +76,12 @@ AppState.addEventListener('change', (state) => {
   if (state === 'active') void outbox.resume();
 });
 
-export const container: Dependencies = { auth, profiles, posts, comments, images, sync: outbox };
+export const container: Dependencies = {
+  auth,
+  profiles,
+  posts,
+  comments,
+  messages,
+  images,
+  sync: outbox,
+};

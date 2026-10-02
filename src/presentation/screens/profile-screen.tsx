@@ -1,4 +1,4 @@
-import { Link, Stack } from 'expo-router';
+import { Link, router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 
@@ -33,7 +33,7 @@ function Stat({ count, label }: { count: number; label: string }) {
 }
 
 function ProfileHeader({ details, onChanged }: { details: ProfileDetails; onChanged: () => void }) {
-  const { auth, profiles } = useDependencies();
+  const { auth, profiles, messages } = useDependencies();
   const [busy, setBusy] = useState(false);
   const { profile, followStatus } = details;
 
@@ -96,6 +96,18 @@ function ProfileHeader({ details, onChanged }: { details: ProfileDetails; onChan
               // Pulsar "Solicitado" cancela la solicitud; "Siguiendo" deja de seguir.
               followStatus === 'none' ? profiles.follow(profile.id) : profiles.unfollow(profile.id),
             )
+          }
+        />
+      )}
+      {followStatus !== 'self' && (
+        <Button
+          label="Mensaje"
+          variant="secondary"
+          onPress={() =>
+            run(async () => {
+              const conversationId = await messages.openConversationWith(profile.id);
+              router.push({ pathname: '/messages/[conversationId]', params: { conversationId } });
+            })
           }
         />
       )}

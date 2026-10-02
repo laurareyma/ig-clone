@@ -9,6 +9,7 @@ const symbols = {
   comment: { ios: 'bubble.right', android: 'chat_bubble_outline' },
   share: { ios: 'paperplane', android: 'send' },
   plus: { ios: 'plus.app', android: 'add_box' },
+  messages: { ios: 'bubble.left.and.bubble.right', android: 'forum' },
   lock: { ios: 'lock', android: 'lock' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 

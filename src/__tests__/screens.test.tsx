@@ -1,6 +1,6 @@
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
-import type { ProfileDetails } from '@/domain/entities';
+import type { Conversation, Message, ProfileDetails } from '@/domain/entities';
 import {
   testProfile,
   testSession,
@@ -16,7 +16,7 @@ jest.mock('@/di/container', () => {
 const fake = jest.requireMock('@/di/container').container as ReturnType<
   typeof createFakeDependencies
 >;
-const { data, posts, comments, profiles } = fake;
+const { data, posts, comments, profiles, messages } = fake;
 
 const ownDetails: ProfileDetails = {
   profile: testProfile,
@@ -33,6 +33,9 @@ beforeEach(() => {
   data.comments.set([]);
   data.details.set(ownDetails);
   data.syncStatus.set({ online: true, pendingCount: 0 });
+  data.inbox.set([]);
+  data.conversation.set(null);
+  data.messages.set([]);
   data.followRequests = [];
   data.searchResults = [];
 });
@@ -300,5 +303,164 @@ describe('explorar', () => {
     // Una sola consulta, con el texto final.
     expect(search.mock.calls).toEqual([['bet']]);
     expect(screen.getByText('beto')).toBeTruthy();
+  });
+});
+
+describe('mensajes', () => {
+  const at = (minute: number) => `2026-01-01T10:${String(minute).padStart(2, '0')}:00+00:00`;
+  const message = (id: string, minute: number, senderId: string, body: string): Message => ({
+    id,
+    conversationId: 'c-beto',
+    senderId,
+    body,
+    createdAt: at(minute),
+    pending: false,
+  });
+  const withBeto: Conversation = {
+    id: 'c-beto',
+    otherUser: beto,
+    lastMessage: message('m2', 2, 'beto', '¿Vienes mañana?'),
+    lastMessageAt: at(2),
+    unreadCount: 2,
+    otherLastDeliveredAt: null,
+    otherLastReadAt: null,
+  };
+
+  it('el feed muestra cuántos mensajes hay sin leer', async () => {
+    data.inbox.set([withBeto]);
+
+    await open('/');
+
+    expect(screen.getByLabelText('Mensajes, 2 sin leer')).toBeTruthy();
+  });
+
+  it('la bandeja lista las conversaciones con su último mensaje y abre el chat', async () => {
+    data.inbox.set([withBeto]);
+    const { router } = await open('/messages');
+
+    expect(screen.getByText('beto')).toBeTruthy();
+    expect(screen.getByText(/¿Vienes mañana\?/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('beto'));
+    expect(router.getPathname()).toBe('/messages/c-beto');
+  });
+
+  it('la bandeja refleja lo que llega por tiempo real: mensaje nuevo y no leídos', async () => {
+    data.inbox.set([{ ...withBeto, unreadCount: 0 }]);
+    await open('/messages');
+    expect(screen.queryByText('1')).toBeNull();
+
+    // Lo que entrega la base local tras guardar un mensaje nuevo. El orden de la lista
+    // también sale de ahí (ver las pruebas del repositorio).
+    await act(async () =>
+      data.inbox.set([
+        { ...withBeto, unreadCount: 1, lastMessage: message('m9', 9, 'beto', 'Ya salí') },
+      ]),
+    );
+
+    expect(screen.getByText(/Ya salí/)).toBeTruthy();
+    expect(screen.getByText('1')).toBeTruthy();
+  });
+
+  describe('chat', () => {
+    const history = [
+      message('m3', 3, 'user-1', 'Sí, a las 8'),
+      message('m2', 2, 'beto', '¿Vienes mañana?'),
+    ];
+
+    async function openChat(conversation: Conversation = withBeto, list: Message[] = history) {
+      data.conversation.set(conversation);
+      data.messages.set(list);
+      return open('/messages/c-beto');
+    }
+
+    it('al abrirlo marca la conversación como leída', async () => {
+      const markRead = jest.spyOn(messages, 'markRead');
+
+      await openChat();
+
+      expect(markRead).toHaveBeenCalledWith('c-beto');
+    });
+
+    it('enviar guarda el mensaje recortado, vacía el campo y avisa de que dejó de escribir', async () => {
+      const send = jest.spyOn(messages, 'send');
+      const notifyTyping = jest.fn();
+      jest.spyOn(messages, 'joinTyping').mockReturnValue({ notifyTyping, leave: jest.fn() });
+      await openChat();
+
+      await fireEvent.changeText(screen.getByLabelText('Mensaje'), '  Nos vemos  ');
+      expect(notifyTyping).toHaveBeenLastCalledWith(true);
+      await fireEvent.press(screen.getByLabelText('Enviar mensaje'));
+
+      expect(send).toHaveBeenCalledWith({ conversationId: 'c-beto', body: 'Nos vemos' });
+      expect(notifyTyping).toHaveBeenLastCalledWith(false);
+      expect(screen.getByLabelText('Mensaje').props.value).toBe('');
+    });
+
+    it.each([
+      [{}, 'Enviado'],
+      [{ otherLastDeliveredAt: at(4) }, 'Entregado'],
+      [{ otherLastDeliveredAt: at(4), otherLastReadAt: at(5) }, 'Visto'],
+    ])('con las marcas %p mi último mensaje aparece como "%s"', async (marks, label) => {
+      await openChat({ ...withBeto, ...marks });
+
+      expect(screen.getByText(label)).toBeTruthy();
+    });
+
+    it('un mensaje en la cola aparece como "Enviando…" aunque el otro haya leído los anteriores', async () => {
+      const pending = { ...message('m4', 6, 'user-1', 'Llevo postre'), pending: true };
+
+      await openChat({ ...withBeto, otherLastReadAt: at(5) }, [pending, ...history]);
+
+      expect(screen.getByText('Enviando…')).toBeTruthy();
+      expect(screen.queryByText('Visto')).toBeNull();
+    });
+
+    it('muestra "Escribiendo…" mientras el otro escribe', async () => {
+      await openChat();
+      expect(screen.queryByText('Escribiendo…')).toBeNull();
+
+      await act(async () => data.receiveTyping(true));
+      expect(screen.getByText('Escribiendo…')).toBeTruthy();
+
+      await act(async () => data.receiveTyping(false));
+      expect(screen.queryByText('Escribiendo…')).toBeNull();
+    });
+
+    it('al salir abandona el canal de escritura', async () => {
+      const leave = jest.fn();
+      jest.spyOn(messages, 'joinTyping').mockReturnValue({ notifyTyping: jest.fn(), leave });
+      await openChat();
+
+      await screen.unmount();
+
+      expect(leave).toHaveBeenCalledTimes(1);
+    });
+
+    it('un enlace a una publicación dentro de un mensaje se puede abrir', async () => {
+      const link = 'instagramclone://post/3f2b8c1e-9d4a-4c61-8f0e-2b7a5d9c1e44';
+      const { router } = await openChat(withBeto, [message('m5', 5, 'beto', `Mira ${link}`)]);
+
+      await fireEvent.press(screen.getByText('Ver publicación'));
+
+      expect(router.getPathname()).toBe('/post/3f2b8c1e-9d4a-4c61-8f0e-2b7a5d9c1e44');
+    });
+  });
+
+  it('desde un perfil se abre la conversación con esa persona', async () => {
+    data.details.set({
+      profile: beto,
+      postsCount: 0,
+      followersCount: 0,
+      followingCount: 0,
+      followStatus: 'accepted',
+    });
+    const openWith = jest.spyOn(messages, 'openConversationWith');
+    const { router } = await open('/user/beto');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Mensaje' }));
+
+    expect(openWith).toHaveBeenCalledWith('beto');
+    expect(router.getPathname()).toBe('/messages/c-beto');
   });
 });

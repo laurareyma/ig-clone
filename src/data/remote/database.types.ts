@@ -339,7 +339,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_use_conversation_topic: { Args: { topic: string }; Returns: boolean }
       can_view_profile_content: { Args: { target: string }; Returns: boolean }
+      get_inbox: {
+        Args: { only_conversation?: string }
+        Returns: {
+          conversation_id: string
+          last_message_at: string
+          last_message_body: string
+          last_message_created_at: string
+          last_message_id: string
+          last_message_sender_id: string
+          other_avatar_url: string
+          other_bio: string
+          other_full_name: string
+          other_id: string
+          other_is_private: boolean
+          other_last_delivered_at: string
+          other_last_read_at: string
+          other_username: string
+          unread_count: number
+        }[]
+      }
       get_or_create_dm: { Args: { other: string }; Returns: string }
       get_posts: {
         Args: {
@@ -381,6 +402,8 @@ export type Database = {
         Returns: boolean
       }
       is_username_available: { Args: { candidate: string }; Returns: boolean }
+      mark_delivered: { Args: never; Returns: undefined }
+      mark_read: { Args: { conversation: string }; Returns: undefined }
     }
     Enums: {
       follow_status: "pending" | "accepted"

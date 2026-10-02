@@ -59,16 +59,26 @@ export type Story = {
   expiresAt: string;
 };
 
-export type Conversation = {
-  id: string;
-  otherUserId: string;
-  lastMessageAt: string;
-};
-
 export type Message = {
   id: string;
   conversationId: string;
   senderId: string;
   body: string;
   createdAt: string;
+  // Guardado en el dispositivo pero aún no confirmado por el servidor.
+  pending: boolean;
+};
+
+// Conversación 1 a 1, vista desde el usuario actual.
+export type Conversation = {
+  id: string;
+  otherUser: Profile;
+  lastMessage: Message | null;
+  lastMessageAt: string;
+  // Mensajes del otro que el usuario actual aún no ha leído.
+  unreadCount: number;
+  // Marcas de agua del otro participante: todo mensaje anterior a cada una está
+  // entregado en su dispositivo o leído por él.
+  otherLastDeliveredAt: string | null;
+  otherLastReadAt: string | null;
 };

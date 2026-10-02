@@ -1,8 +1,8 @@
+import { toMillis } from '@/domain/timestamps';
+
 // "ahora", "5 min", "3 h", "2 d", "4 sem" o la fecha si es más antigua.
 export function formatRelativeTime(isoDate: string, now: Date = new Date()): string {
-  // Postgres envía microsegundos (6 decimales) y no todos los motores de JavaScript
-  // aceptan más de 3 al interpretar la fecha.
-  const date = new Date(isoDate.replace(/(\.\d{3})\d+/, '$1'));
+  const date = new Date(toMillis(isoDate));
   const seconds = Math.max(0, (now.getTime() - date.getTime()) / 1000);
 
   if (seconds < 60) return 'ahora';

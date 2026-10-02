@@ -3,6 +3,7 @@ import { createContext, use, type PropsWithChildren } from 'react';
 import type { AuthRepository } from '@/domain/repositories/auth-repository';
 import type { CommentRepository } from '@/domain/repositories/comment-repository';
 import type { ImageCache } from '@/domain/repositories/image-cache';
+import type { MessageRepository } from '@/domain/repositories/message-repository';
 import type { PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
 import type { SyncMonitor } from '@/domain/repositories/sync-monitor';
@@ -14,6 +15,7 @@ export type Dependencies = {
   profiles: ProfileRepository;
   posts: PostRepository;
   comments: CommentRepository;
+  messages: MessageRepository;
   images: ImageCache;
   sync: SyncMonitor;
 };

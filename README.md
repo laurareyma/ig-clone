@@ -198,8 +198,40 @@ Qué pasa cuando un envío falla (`classify-error.ts`):
 - **Límite conocido.** Las operaciones se envían mientras la app está abierta o al
   volver a abrirla. Con la app cerrada no se ejecuta nada; quedan guardadas en SQLite.
 - **Cerrar sesión** vacía la cola: las acciones pendientes no se envían con otra cuenta.
-- Solo pasan por la cola los likes y los comentarios. Publicar, seguir y cambiar la
-  privacidad necesitan conexión.
+- Pasan por la cola los likes, los comentarios y los mensajes directos. Publicar,
+  seguir y cambiar la privacidad necesitan conexión.
+
+### Mensajes directos
+
+- **Mensajes nuevos:** `MessagingConnection` mantiene un canal de Supabase Realtime
+  (WebSocket) abierto mientras hay sesión. Escucha los `INSERT` de `messages`; no hace
+  falta filtrar, porque la RLS solo envía filas de conversaciones del usuario. Cada
+  evento se escribe en SQLite y las pantallas se actualizan desde ahí.
+- **Bandeja:** `get_inbox` trae en una consulta el otro participante, el último mensaje
+  y los no leídos. La lista se ordena en la consulta local por `last_message_at`, así
+  que al guardarse un mensaje nuevo la conversación sube sola.
+- **Enviar:** pasa por la misma cola que likes y comentarios. El mensaje aparece al
+  instante como "Enviando…", se envía en orden y sobrevive a quedarse sin conexión. El id
+  lo genera el cliente; el eco que devuelve Realtime no se duplica y sustituye la hora
+  del dispositivo por la del servidor.
+- **Entregado y visto:** no hay un acuse por mensaje. Cada participante guarda dos
+  marcas por conversación, "recibido hasta" y "leído hasta", y un mensaje está entregado
+  o visto si es anterior a la marca (`domain/message-status.ts`). Las marcas solo se
+  escriben con `mark_delivered()` y `mark_read()`, que usan la hora del servidor; el
+  cliente no tiene permiso para escribirlas directamente. Los cambios llegan al
+  remitente por el mismo canal de Realtime.
+- **"Escribiendo…":** es un evento efímero, así que va por Realtime Broadcast y no se
+  guarda en ninguna tabla. El canal `conversation:{id}` es privado: unas políticas sobre
+  `realtime.messages` solo dejan escuchar y emitir a los participantes. Al escribir se
+  avisa como mucho cada 2 s, y el indicador caduca a los 4 s sin avisos por si el "dejó
+  de escribir" no llega nunca.
+- **Canales:** el de mensajes vive mientras hay sesión; el de escritura, solo mientras
+  el chat está abierto. Los dos se cierran en la limpieza de su `useEffect`.
+- **Compartir una publicación:** un enlace `instagramclone://post/{id}` pegado en un
+  mensaje se muestra con un botón "Ver publicación".
+
+Para que el canal privado sea obligatorio hay que desactivar "Allow public access" en
+los ajustes de Realtime del proyecto de Supabase.
 
 ## Navegación
 
@@ -213,6 +245,7 @@ src/app/
       post/[id].tsx    Publicación con sus comentarios.
       user/[id].tsx    Perfil de otro usuario.
       follows/[userId].tsx  Seguidores o seguidos.
+  messages/            Bandeja y chat, a pantalla completa sobre las pestañas.
   create-post.tsx      Modal.
   story/[userId].tsx   Modal a pantalla completa.
 ```

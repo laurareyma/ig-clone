@@ -1,17 +1,20 @@
 import { FlashList } from '@shopify/flash-list';
 import { Link, Stack } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/presentation/components/empty-state';
 import { Icon } from '@/presentation/components/icon';
 import { PostCard } from '@/presentation/components/post-card';
 import { SyncBanner } from '@/presentation/components/sync-banner';
+import { UnreadBadge } from '@/presentation/components/unread-badge';
 import { ThemedView } from '@/presentation/components/themed-view';
 import { useFeed } from '@/presentation/hooks/use-feed';
+import { useInbox } from '@/presentation/hooks/use-messages';
 import { Spacing } from '@/presentation/theme';
 
 export function FeedScreen() {
   const { posts, refreshing, loadingMore, refresh, loadMore } = useFeed('home');
+  const unread = useInbox().unreadTotal;
 
   return (
     <ThemedView style={styles.fill}>
@@ -19,11 +22,24 @@ export function FeedScreen() {
         options={{
           title: 'Inicio',
           headerRight: () => (
-            <Link href="/create-post" asChild>
-              <Pressable hitSlop={8} accessibilityRole="link" accessibilityLabel="Nueva publicación">
-                <Icon name="plus" />
-              </Pressable>
-            </Link>
+            <View style={styles.headerActions}>
+              <Link href="/create-post" asChild>
+                <Pressable hitSlop={8} accessibilityRole="link" accessibilityLabel="Nueva publicación">
+                  <Icon name="plus" />
+                </Pressable>
+              </Link>
+              <Link href="/messages" asChild>
+                <Pressable
+                  hitSlop={8}
+                  accessibilityRole="link"
+                  accessibilityLabel={
+                    unread > 0 ? `Mensajes, ${unread} sin leer` : 'Mensajes'
+                  }>
+                  <Icon name="messages" />
+                  {unread > 0 && <UnreadBadge count={unread} style={styles.badge} />}
+                </Pressable>
+              </Link>
+            </View>
           ),
         }}
       />
@@ -61,5 +77,15 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: Spacing.three,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
   },
 });

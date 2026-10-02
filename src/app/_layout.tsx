@@ -4,6 +4,7 @@ import { useColorScheme } from 'react-native';
 
 import { container } from '@/di/container';
 import { DependenciesProvider } from '@/presentation/dependencies';
+import { MessagingConnection } from '@/presentation/session/messaging-connection';
 import { SessionProvider, useSession } from '@/presentation/session/session-provider';
 
 // La pantalla de carga nativa se queda hasta saber si hay sesión guardada, para no
@@ -41,9 +42,11 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {session && <MessagingConnection />}
       <Stack>
         <Stack.Protected guard={session !== null}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="messages" options={{ headerShown: false }} />
           <Stack.Screen name="create-post" options={{ presentation: 'modal' }} />
           <Stack.Screen
             name="story/[userId]"

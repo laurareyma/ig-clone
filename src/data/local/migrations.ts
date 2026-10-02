@@ -91,6 +91,28 @@ export const migrations: Migration[] = [
       CREATE INDEX outbox_entity ON outbox (type, entity_id);
     `,
   },
+  {
+    version: 5,
+    sql: `
+      CREATE TABLE conversations (
+        id TEXT PRIMARY KEY NOT NULL,
+        other_user_id TEXT NOT NULL,
+        last_message_at TEXT NOT NULL,
+        unread_count INTEGER NOT NULL DEFAULT 0,
+        other_last_delivered_at TEXT,
+        other_last_read_at TEXT
+      );
+
+      CREATE TABLE messages (
+        id TEXT PRIMARY KEY NOT NULL,
+        conversation_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX messages_conversation ON messages (conversation_id, created_at);
+    `,
+  },
 ];
 
 // Tablas con datos del usuario; se vacían al cerrar sesión. image_cache no está aquí
@@ -101,6 +123,8 @@ export const userTables = [
   'posts',
   'feed_entries',
   'comments',
+  'conversations',
+  'messages',
   // Las acciones pendientes son de quien las hizo: no deben enviarse con otra sesión.
   'outbox',
 ] as const;

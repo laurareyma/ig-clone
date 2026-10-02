@@ -1,7 +1,16 @@
-import type { Comment, Post, Profile, ProfileDetails, Session } from '@/domain/entities';
+import type {
+  Comment,
+  Conversation,
+  Message,
+  Post,
+  Profile,
+  ProfileDetails,
+  Session,
+} from '@/domain/entities';
 import type { AuthRepository } from '@/domain/repositories/auth-repository';
 import type { CommentRepository } from '@/domain/repositories/comment-repository';
 import type { ImageCache } from '@/domain/repositories/image-cache';
+import type { MessageRepository } from '@/domain/repositories/message-repository';
 import { feedKey, type PostRepository } from '@/domain/repositories/post-repository';
 import type { ProfileRepository } from '@/domain/repositories/profile-repository';
 import type { SyncMonitor, SyncStatus } from '@/domain/repositories/sync-monitor';
@@ -60,6 +69,11 @@ export function createFakeDependencies() {
       followingCount: 0,
       followStatus: 'self',
     }),
+    inbox: observable<Conversation[]>([]),
+    conversation: observable<Conversation | null>(null),
+    messages: observable<Message[]>([]),
+    // La prueba lo llama para simular que el otro escribe.
+    receiveTyping: (_typing: boolean) => {},
     syncStatus: observable<SyncStatus>({ online: true, pendingCount: 0 }),
     followRequests: [] as Profile[],
     searchResults: [] as Profile[],
@@ -123,6 +137,23 @@ export function createFakeDependencies() {
     subscribe: () => () => {},
   };
 
+  const messages: MessageRepository = {
+    watchInbox: (listener) => data.inbox.watch(listener),
+    refreshInbox: async () => {},
+    watchConversation: (_id, listener) => data.conversation.watch(listener),
+    watchMessages: (_id, listener) => data.messages.watch(listener),
+    refreshMessages: async () => ({ hasMore: false }),
+    loadEarlierMessages: async () => ({ hasMore: false }),
+    openConversationWith: async (userId) => `c-${userId}`,
+    send: async () => {},
+    markRead: async () => {},
+    connect: () => () => {},
+    joinTyping(_id, onTyping) {
+      data.receiveTyping = onTyping;
+      return { notifyTyping: () => {}, leave: () => {} };
+    },
+  };
+
   const images: ImageCache = {
     peek: () => null,
     load: () => ({ promise: new Promise(() => {}), cancel: () => {} }),
@@ -138,5 +169,16 @@ export function createFakeDependencies() {
     session = undefined;
   };
 
-  return { auth, profiles, posts, comments, images, sync, data, setSession, resetSession };
+  return {
+    auth,
+    profiles,
+    posts,
+    comments,
+    messages,
+    images,
+    sync,
+    data,
+    setSession,
+    resetSession,
+  };
 }
