@@ -24,6 +24,18 @@ npm run check       # las cuatro anteriores, lo mismo que corre el CI
 
 `.github/workflows/ci.yml` ejecuta estas comprobaciones en cada pull request y en `main`.
 
+## Documentación
+
+- [docs/arquitectura.md](docs/arquitectura.md): decisiones de arquitectura, con lo que se
+  descartó y lo que cuesta cada una.
+- [docs/defensa.md](docs/defensa.md): mapa de requisitos a código y pruebas, qué corre
+  en cada hilo y preguntas probables por módulo.
+- [docs/pruebas-en-dispositivo.md](docs/pruebas-en-dispositivo.md): lista de pruebas
+  manuales y cómo medir FPS y memoria.
+
+Para medir el feed con listas largas, `npm run seed` crea publicaciones de prueba en una
+cuenta (instrucciones en el propio script, `scripts/seed-posts.mjs`).
+
 ## Base de datos
 
 El esquema y las reglas de privacidad (RLS) están en `supabase/migrations/`.

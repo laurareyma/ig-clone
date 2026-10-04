@@ -52,7 +52,8 @@
     "gen:types": "supabase gen types typescript --linked --schema public > src/data/remote/database.types.ts",
     "test": "jest",
     "test:rls": "node supabase/tests/rls.test.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run test:rls"
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:rls",
+    "seed": "node scripts/seed-posts.mjs"
   },
   "jest": {
     "preset": "jest-expo",
