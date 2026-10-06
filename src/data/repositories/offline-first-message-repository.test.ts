@@ -342,6 +342,17 @@ describe('tiempo real', () => {
     expect(await details()).toMatchObject({ otherLastDeliveredAt: null, otherLastReadAt: null });
   });
 
+  it('al quedar activo el canal (o al reconectar) trae lo que no llegó como evento', async () => {
+    const { repository, inbox, emit, state } = await setup();
+    repository.connect();
+    state.conversations = [conversation('beto', message('m1', 1), { unreadCount: 1 })];
+
+    emit().onSubscribed();
+    await settle();
+
+    expect(await inbox()).toMatchObject([{ id: 'c-beto', unreadCount: 1 }]);
+  });
+
   it('desconectar cierra el canal', async () => {
     const { repository, unsubscribeRemote } = await setup();
 

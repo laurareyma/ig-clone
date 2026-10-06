@@ -144,6 +144,8 @@ archivos locales que la caché controla.
 - **Comentarios en tiempo real:** `useComments` abre un canal de Supabase Realtime
   mientras la pantalla está abierta; cada evento se escribe en SQLite y la lista se
   actualiza sola. El eco de un comentario propio se ignora porque el id ya existe.
+  Cuando el canal queda activo (al abrirse y tras cada reconexión del WebSocket) se
+  vuelve a consultar, para recuperar lo publicado mientras no estaba escuchando.
 - **Hilos:** `domain/comment-threads.ts` agrupa los comentarios en hilos de un nivel.
 - **Crear publicación:** la imagen se reduce a 1080 px de ancho y se comprime en un
   módulo nativo antes de subirla a `media/{user_id}/`. Si falla guardar la fila, se borra
@@ -218,7 +220,9 @@ Qué pasa cuando un envío falla (`classify-error.ts`):
 - **Mensajes nuevos:** `MessagingConnection` mantiene un canal de Supabase Realtime
   (WebSocket) abierto mientras hay sesión. Escucha los `INSERT` de `messages`; no hace
   falta filtrar, porque la RLS solo envía filas de conversaciones del usuario. Cada
-  evento se escribe en SQLite y las pantallas se actualizan desde ahí.
+  evento se escribe en SQLite y las pantallas se actualizan desde ahí. Al quedar activo
+  el canal, y tras cada reconexión, se refresca la bandeja para recuperar lo que llegó
+  mientras no escuchaba.
 - **Bandeja:** `get_inbox` trae en una consulta el otro participante, el último mensaje
   y los no leídos. La lista se ordena en la consulta local por `last_message_at`, así
   que al guardarse un mensaje nuevo la conversación sube sola.

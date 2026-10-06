@@ -15,6 +15,8 @@ export type RemoteCommentEvent = {
 export type CommentEventHandlers = {
   onInsert(comment: RemoteCommentEvent): void;
   onDelete(commentId: string): void;
+  // El canal quedó activo: al abrirlo por primera vez y tras cada reconexión.
+  onSubscribed(): void;
 };
 
 export interface CommentRemoteSource {
@@ -106,7 +108,9 @@ export class SupabaseCommentSource implements CommentRemoteSource {
           if (old.id) handlers.onDelete(old.id);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') handlers.onSubscribed();
+      });
 
     return () => void this.client.removeChannel(channel);
   }

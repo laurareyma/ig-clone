@@ -87,6 +87,9 @@ export class OfflineFirstCommentRepository implements CommentRepository {
       // refresh() corrige cualquier diferencia.
       onInsert: (event) => void this.applyInsert(event).catch(() => {}),
       onDelete: (commentId) => void this.applyDelete(commentId).catch(() => {}),
+      // Lo publicado antes de que el canal estuviera activo, o mientras el WebSocket
+      // estaba reconectando, no llega como evento: se recupera con una consulta.
+      onSubscribed: () => void this.refresh(postId).catch(() => {}),
     });
   }
 

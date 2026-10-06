@@ -237,6 +237,20 @@ describe('tiempo real', () => {
     expect(await count()).toBe(0);
   });
 
+  it('al quedar activo el canal (o al reconectar) trae lo que no llegó como evento', async () => {
+    const server = [commentFixture('c1', 1)];
+    const { repository, remote, emit, shown } = await setup(server);
+    repository.subscribe('p1');
+    // Publicado mientras el canal todavía se estaba conectando.
+    server.push(commentFixture('c2', 2));
+
+    emit().onSubscribed();
+    await settle();
+
+    expect(remote.fetchComments).toHaveBeenCalledWith('p1');
+    expect((await shown()).map((comment) => comment.id)).toEqual(['c1', 'c2']);
+  });
+
   it('cancelar la suscripción cierra el canal', async () => {
     const { repository, unsubscribeRemote } = await setup();
 

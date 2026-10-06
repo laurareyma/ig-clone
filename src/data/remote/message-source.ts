@@ -17,6 +17,8 @@ export type ReceiptEvent = {
 export type MessageEventHandlers = {
   onMessage(message: Message): void;
   onReceipt(receipt: ReceiptEvent): void;
+  // El canal quedó activo: al abrirlo por primera vez y tras cada reconexión.
+  onSubscribed(): void;
 };
 
 export type RemoteTypingChannel = {
@@ -129,7 +131,9 @@ export class SupabaseMessageSource implements MessageRemoteSource {
             lastReadAt: row.last_read_at,
           }),
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') handlers.onSubscribed();
+      });
 
     return () => void this.client.removeChannel(channel);
   }

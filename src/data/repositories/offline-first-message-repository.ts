@@ -165,6 +165,9 @@ export class OfflineFirstMessageRepository implements MessageRepository {
       // refresh corrige cualquier diferencia.
       onMessage: (message) => void this.applyMessage(message).catch(() => {}),
       onReceipt: (receipt) => void this.applyReceipt(receipt).catch(() => {}),
+      // Lo que llegó antes de que el canal estuviera activo, o mientras el WebSocket
+      // estaba reconectando, no llega como evento: se recupera con una consulta.
+      onSubscribed: () => void this.refreshInbox().catch(() => {}),
     });
   }
 

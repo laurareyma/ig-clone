@@ -98,6 +98,9 @@ trigger (`set_follow_status`) y no tiene permiso sobre esa columna.
 Canal de Realtime con `postgres_changes` filtrado por post (`comment-source.ts`). Cada
 evento se guarda en SQLite; la lista se actualiza sola. El eco de un comentario propio
 no se duplica porque el id ya existe (`INSERT OR IGNORE`).
+Contrapregunta: *¿y lo que se publica mientras el WebSocket se reconecta?* No llega como
+evento; por eso, cada vez que el canal confirma la suscripción (`SUBSCRIBED`, también
+tras reconectar), el repositorio vuelve a consultar.
 
 **¿Por qué los contadores los lleva un trigger?**
 Para que sean consistentes aunque escriban muchos usuarios a la vez: el cliente no puede
