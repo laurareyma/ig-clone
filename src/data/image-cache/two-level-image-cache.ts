@@ -1,3 +1,4 @@
+import { throwIfAborted } from '@/data/image-cache/abort';
 import { DiskIndex } from '@/data/image-cache/disk-index';
 import type { ImageFiles } from '@/data/image-cache/image-files';
 import { LruMap } from '@/data/image-cache/lru-map';
@@ -152,14 +153,14 @@ export class TwoLevelImageCache implements ImageCache {
     }
 
     // Red.
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     const fileName = this.newFileName();
     const size = await this.files.download(image, fileName, signal);
 
     if (signal.aborted) {
       // Se canceló justo al terminar: el archivo ya no le sirve a nadie.
       this.files.remove(fileName);
-      signal.throwIfAborted();
+      throwIfAborted(signal);
     }
 
     await this.index.put({ key, file_name: fileName, size, last_accessed: this.tick() });

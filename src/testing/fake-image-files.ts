@@ -1,3 +1,4 @@
+import { abortError } from '@/data/image-cache/abort';
 import type { ImageFiles } from '@/data/image-cache/image-files';
 import { imageKey, type ImageRef } from '@/domain/repositories/image-cache';
 
@@ -39,7 +40,7 @@ export function createFakeImageFiles() {
 
         signal.addEventListener('abort', () => {
           pending.splice(pending.indexOf(entry), 1);
-          reject(signal.reason);
+          reject(abortError());
         });
       });
     },

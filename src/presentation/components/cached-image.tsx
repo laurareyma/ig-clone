@@ -41,7 +41,12 @@ export function CachedImage({ image, aspectRatio, style, accessibilityLabel, onR
         if (active && result !== cached) setLoaded({ key, uri: result });
       },
       // Cancelada o fallida: se queda el hueco; se reintenta al volver a montar la celda.
-      () => {},
+      (error: unknown) => {
+        // En desarrollo, la causa sale en la terminal de Metro. Cancelar no es un fallo.
+        if (__DEV__ && (error as Error | null)?.name !== 'AbortError') {
+          console.warn(`[CachedImage] no se pudo cargar ${key}:`, (error as Error)?.message ?? error);
+        }
+      },
     );
 
     // La celda sale de pantalla o se recicla: se suelta la descarga.
@@ -66,6 +71,10 @@ export function CachedImage({ image, aspectRatio, style, accessibilityLabel, onR
           source={{ uri }}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
+          onError={(event) => {
+            // El archivo local existe pero el componente nativo no lo pudo pintar.
+            if (__DEV__) console.warn(`[CachedImage] no se pudo pintar ${uri}:`, event.nativeEvent.error);
+          }}
         />
       )}
     </View>

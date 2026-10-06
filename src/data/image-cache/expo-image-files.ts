@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { throwIfAborted } from '@/data/image-cache/abort';
 import type { ImageFiles } from '@/data/image-cache/image-files';
 import type { ImageRef } from '@/domain/repositories/image-cache';
 
@@ -39,7 +40,7 @@ export class ExpoImageFiles implements ImageFiles {
   async download(image: ImageRef, fileName: string, signal: AbortSignal): Promise<number> {
     const { supabaseUrl, publishableKey, getAccessToken } = this.options;
     const token = (await getAccessToken()) ?? publishableKey;
-    signal.throwIfAborted();
+    throwIfAborted(signal);
 
     if (!this.directory.exists) this.directory.create({ intermediates: true, idempotent: true });
 
