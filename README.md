@@ -304,6 +304,11 @@ src/app/
 
 `instagramclone://post/{uuid}` abre la publicación en la pestaña Inicio.
 
+A cualquier enlace externo se le quitan los parámetros (`?…`) y el fragmento (`#…`)
+antes de que lo interprete el enrutador: la app no los usa, y `expo-router` 57 los
+decodifica con una versión de `decode-uri-component` que tiene un fallo de denegación de
+servicio (GHSA-vcc3-ghjq-m6fr). Se puede quitar esta medida al actualizar a SDK 58.
+
 `post/[id]` existe en las cuatro pestañas, así que el enlace es ambiguo.
 `src/app/+native-intent.tsx` lo reescribe a `/(tabs)/(home)/post/{uuid}` antes de que el
 enrutador lo resuelva (lógica y pruebas en `presentation/navigation/incoming-link.ts`).

@@ -219,6 +219,11 @@ refresco.
 
 ## Límites conocidos (mejor decirlos antes de que pregunten)
 
+- `npm audit` marca 66 avisos, pero son 5 problemas: 4 en herramientas de desarrollo
+  (Jest, Metro, la CLI de Expo) que no viajan en la app, y 1 en `expo-router` al
+  decodificar parámetros de URL. Este último está mitigado quitando los parámetros de
+  todo enlace externo (`incoming-link.ts`) y se resuelve del todo con Expo SDK 58.
+
 - Con la app cerrada no se sincroniza nada; requeriría `expo-background-task`.
 - Solo likes, comentarios y mensajes van por la cola; publicar, seguir y cambiar la
   privacidad necesitan conexión.
